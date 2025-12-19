@@ -1,13 +1,39 @@
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>مدیریت بوکمارک</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>Smart Bookmark Manager</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
-  <h2>بوکمارک‌های من</h2>
-  <div id="bookmark-list">در حال بارگذاری...</div>
+  <h2>My Bookmarks</h2>
+
+  <!-- Search box -->
+  <input
+    id="searchInput"
+    type="text"
+    placeholder="Search bookmarks..."
+    autocomplete="off"
+  />
+
+  <!-- Sort dropdown -->
+  <div id="controls">
+    <label for="sortSelect">Sort:</label>
+    <select id="sortSelect">
+      <option value="none" selected>No sorting</option>
+      <option value="title-asc">Title A → Z</option>
+      <option value="title-desc">Title Z → A</option>
+      <option value="date-desc">Newest first</option>
+      <option value="date-asc">Oldest first</option>
+    </select>
+
+    <button id="dedupBtn">Remove duplicates</button>
+  </div>
+
+  <!-- Container for bookmarks -->
+  <div id="listContainer">Loading...</div>
+
   <script src="popup.js"></script>
 </body>
 </html>

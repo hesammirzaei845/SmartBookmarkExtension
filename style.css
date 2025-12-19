@@ -1,0 +1,143 @@
+/* Base */
+body {
+  font-family: 'Vazir', 'IranSans', sans-serif;
+  font-weight: 300;
+  font-size: 13px;
+  direction: ltr;           /* UI انگلیسی */
+  margin: 0;
+  padding: 12px;
+  background-color: #ffffff;
+  color: #2c3e50;
+  width: 320px;
+  min-height: 220px;
+  box-sizing: border-box;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 400;
+  margin: 0 0 10px 0;
+  text-align: center;
+  color: #34495e;
+  border-bottom: 1px solid #e6e8ea;
+  padding-bottom: 6px;
+}
+
+/* Lists reset */
+ul {
+  list-style: none;
+  margin: 6px 0 0 0;
+  padding: 0;
+}
+
+#searchInput {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0 10px 0;
+  padding: 8px 10px;
+  border: 1px solid #e3e6e9;
+  border-radius: 6px;
+  font-size: 13px;
+}
+#searchInput:focus {
+  outline: 2px solid #b9c4cf;
+  outline-offset: 1px;
+}
+
+#controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+#controls label {
+  color: #555;
+}
+
+#sortSelect {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid #e3e6e9;
+  border-radius: 4px;
+  background-color: #fff;
+}
+
+/* Folder label */
+li.folder {
+  font-weight: 400;
+  color: #5f6b76;
+  margin: 8px 0 4px 0;
+  padding: 4px 0;
+  border-bottom: 1px solid #eef1f3;
+}
+
+/* Nested lists under folders */
+li.folder > ul {
+  margin-top: 6px;
+  padding-left: 0;
+}
+
+/* Bookmark item */
+li.bookmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+li.bookmark:hover {
+  background-color: #f6f8fa;
+}
+
+/* Link text: truncate and handle mixed languages */
+li.bookmark a {
+  text-decoration: none;
+  color: #2f3b45;         /* خاکستری تیره، نه آبی تند */
+  font-weight: 400;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: auto;        /* عنوان فارسی/انگلیسی خودکار */
+}
+
+li.bookmark a:hover {
+  text-decoration: underline;
+}
+
+/* Accessibility focus */
+li.bookmark a:focus-visible {
+  outline: 2px solid #b9c4cf;
+  outline-offset: 2px;
+}
+
+/* Compact spacing between groups */
+li + li.folder {
+  margin-top: 10px;
+}
+
+/* Remove any default bullets/indents in nested structures */
+li.folder li.bookmark {
+  margin-left: 0;
+}
+
+/* Dedup button styling */
+#dedupBtn {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid #e3e6e9;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+#dedupBtn:hover {
+  background: #f0f0f0;
+}
