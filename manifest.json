@@ -1,21 +1,23 @@
 {
   "manifest_version": 3,
   "name": "Smart Bookmark Manager",
-  "version": "1.0.0",
-  "description": "مدیریت هوشمند بوکمارک‌ها با دسته‌بندی و نمایش بهینه.",
+  "version": "1.0",
+  "description": "A smart bookmark manager with sorting, deduplication, favicons, folders, themes, and advanced settings.",
+
+  "action": {
+    "default_popup": "popup.html"
+  },
+
+  "options_page": "options.html",
+
   "permissions": [
     "bookmarks",
     "storage"
   ],
-  "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icon16.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
-    }
-  },
-  "background": {
-    "service_worker": "background.js"
+
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
   }
 }

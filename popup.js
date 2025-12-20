@@ -1,40 +1,38 @@
-// Render bookmarks recursively (folder or link)
-function renderBookmarks(bookmarks) {
-  const ul = document.createElement('ul');
+let SETTINGS = {
+  enableDedup: true,
+  enableSorting: true,
+  showFavicons: true,
+  showFolderIcons: true,
+  showDateAdded: false,
+  showCount: true,
+  compactMode: false,
+  enableShortcuts: true,
+  fontSize: "medium",
+  theme: "light"
+};
 
-  bookmarks.forEach(bookmark => {
-    const li = document.createElement('li');
-
-    if (bookmark.url) {
-      li.className = 'bookmark';
-      const a = document.createElement('a');
-      a.href = bookmark.url;
-      const title = bookmark.title || bookmark.url;
-      a.textContent = title;
-      a.title = title;
-      a.target = '_blank';
-      li.appendChild(a);
-    } else {
-      li.className = 'folder';
-      li.textContent = bookmark.title || 'Untitled folder';
-
-      if (bookmark.children) {
-        li.appendChild(renderBookmarks(bookmark.children));
-      }
-    }
-
-    ul.appendChild(li);
-  });
-
-  return ul;
-}
-
-// Global state for all bookmarks + current sort mode
 let ALL_BOOKMARKS = [];
-let CURRENT_SORT = 'none'; // default sort
+let CURRENT_SORT = "none";
+let IS_SEARCH_MODE = false;
+let FOLDER_STATE = {};
 
-// Flatten Chrome bookmark tree for search & sorting
-function flattenBookmarks(nodes, acc = [], path = []) {
+// load bookmarks and settings
+chrome.bookmarks.getTree(tree => {
+  ALL_BOOKMARKS = flatten(tree[0].children);
+
+  chrome.storage.local.get(Object.keys(SETTINGS), data => {
+    SETTINGS = { ...SETTINGS, ...data };
+    applySettings();
+    renderList(ALL_BOOKMARKS);
+    wireSearch();
+    wireSort();
+    wireDedup();
+    wireShortcuts();
+  });
+});
+
+// flatten bookmark tree to flat list
+function flatten(nodes, acc = [], path = []) {
   nodes.forEach(n => {
     const currentPath = n.title ? [...path, n.title] : path;
 
@@ -42,230 +40,385 @@ function flattenBookmarks(nodes, acc = [], path = []) {
       acc.push({
         title: n.title || n.url,
         url: n.url,
-        path: currentPath.join(' / '),
+        path: currentPath.join(" / "),
         dateAdded: n.dateAdded || 0
       });
     } else if (n.children) {
-      flattenBookmarks(n.children, acc, currentPath);
+      flatten(n.children, acc, currentPath);
     }
   });
-
   return acc;
 }
 
-// Group bookmarks by top-level folder (Normal View)
-function groupByFolders(items) {
-  const map = new Map();
+// apply settings to popup UI
+function applySettings() {
+  const body = document.body;
 
-  items.forEach(it => {
-    const top = (it.path.split(' / ')[0] || 'Bookmarks bar').trim();
-    if (!map.has(top)) map.set(top, []);
-    map.get(top).push(it);
-  });
+  body.classList.toggle("dark", SETTINGS.theme === "dark");
 
-  return Array.from(map.entries()).map(([folder, links]) => ({
-    title: folder,
-    children: links.map(l => ({ title: l.title, url: l.url }))
-  }));
+  body.style.fontSize =
+    SETTINGS.fontSize === "small" ? "12px" :
+    SETTINGS.fontSize === "large" ? "16px" : "14px";
+
+  body.classList.toggle("compact", SETTINGS.compactMode);
+
+  document.getElementById("controls").style.display =
+    SETTINGS.enableSorting ? "flex" : "none";
+
+  document.getElementById("dedupBtn").style.display =
+    SETTINGS.enableDedup ? "inline-block" : "none";
 }
 
-// Sort bookmarks (used only in Sorted View)
+// build folder tree structure from flat list
+function buildFolderTree(items) {
+  const root = {
+    name: "root",
+    path: "",
+    folders: new Map(),
+    bookmarks: [],
+    totalCount: 0
+  };
+
+  items.forEach(item => {
+    const parts = item.path ? item.path.split(" / ").filter(Boolean) : [];
+    let node = root;
+    let currentPath = "";
+
+    parts.forEach(part => {
+      currentPath = currentPath ? currentPath + " / " + part : part;
+      if (!node.folders.has(part)) {
+        node.folders.set(part, {
+          name: part,
+          path: currentPath,
+          folders: new Map(),
+          bookmarks: [],
+          totalCount: 0
+        });
+      }
+      node = node.folders.get(part);
+    });
+
+    node.bookmarks.push(item);
+
+    let bubble = node;
+    while (bubble) {
+      bubble.totalCount += 1;
+      const parentPath = bubble.path.includes(" / ")
+        ? bubble.path.slice(0, bubble.path.lastIndexOf(" / "))
+        : "";
+      if (!parentPath) {
+        if (bubble !== root && bubble !== node) root.totalCount += 1;
+        break;
+      }
+      bubble = findFolderByPath(root, parentPath);
+      if (!bubble) break;
+    }
+    root.totalCount += 1;
+  });
+
+  return root;
+}
+
+function pruneSingleItemFolders(node) {
+  if (!node || !node.folders) return;
+
+  // اول زیرپوشه‌ها رو پاکسازی کن (بازگشتی)
+  node.folders.forEach((child, name) => {
+    pruneSingleItemFolders(child);
+  });
+
+  // حالا پوشه‌های یک‌موردی رو حذف کن
+  const toDelete = [];
+
+  node.folders.forEach((child, name) => {
+    const hasSubfolders = child.folders.size > 0;
+    const hasOneBookmark = child.bookmarks.length === 1;
+
+    if (!hasSubfolders && hasOneBookmark) {
+      // انتقال بوکمارک به والد
+      node.bookmarks.push(child.bookmarks[0]);
+      toDelete.push(name);
+    }
+  });
+
+  // حذف پوشه‌های یک‌موردی
+  toDelete.forEach(name => {
+    node.folders.delete(name);
+  });
+}
+
+function findFolderByPath(root, path) {
+  if (!path) return root;
+  const parts = path.split(" / ");
+  let node = root;
+  for (const part of parts) {
+    const next = node.folders.get(part);
+    if (!next) return null;
+    node = next;
+  }
+  return node;
+}
+
+// sorting flat list
 function applySort(items) {
   const sorted = [...items];
 
-  if (CURRENT_SORT === 'title-asc') {
-    sorted.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  } else if (CURRENT_SORT === 'title-desc') {
-    sorted.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
-  } else if (CURRENT_SORT === 'date-desc') {
-    sorted.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0));
-  } else if (CURRENT_SORT === 'date-asc') {
-    sorted.sort((a, b) => (a.dateAdded || 0) - (b.dateAdded || 0));
+  if (CURRENT_SORT === "title-asc") {
+    sorted.sort((a, b) => a.title.localeCompare(b.title));
+  } else if (CURRENT_SORT === "title-desc") {
+    sorted.sort((a, b) => b.title.localeCompare(a.title));
+  } else if (CURRENT_SORT === "date-desc") {
+    sorted.sort((a, b) => b.dateAdded - a.dateAdded);
+  } else if (CURRENT_SORT === "date-asc") {
+    sorted.sort((a, b) => a.dateAdded - b.dateAdded);
   }
 
   return sorted;
 }
 
-// Normalize URL for smarter duplicate detection
-function normalizeUrl(rawUrl) {
-  if (!rawUrl) return '';
+// main render
+function renderList(items) {
+  const container = document.getElementById("listContainer");
+  container.innerHTML = "";
 
-  try {
-    const url = new URL(rawUrl);
-
-    // 1) Host: lowercase + remove leading www.
-    let host = url.hostname.toLowerCase();
-    if (host.startsWith('www.')) {
-      host = host.slice(4);
-    }
-
-    // 2) Path: remove trailing slash (except root "/")
-    let path = url.pathname || '';
-    if (path.endsWith('/') && path !== '/') {
-      path = path.slice(0, -1);
-    }
-
-    // 3) Remove hash completely
-    // (we just ignore url.hash on purpose)
-
-    // 4) Keep only non-tracking query parameters
-    const trackingParams = new Set([
-      'utm_source',
-      'utm_medium',
-      'utm_campaign',
-      'utm_term',
-      'utm_content',
-      'fbclid',
-      'gclid',
-      'igshid',
-      'mc_cid',
-      'mc_eid',
-      'ref'
-    ]);
-
-    const params = [];
-    url.searchParams.forEach((value, key) => {
-      if (!trackingParams.has(key)) {
-        params.push(`${key}=${value}`);
-      }
-    });
-
-    const query = params.length ? `?${params.join('&')}` : '';
-
-    // We intentionally drop protocol (http/https)
-    return `${host}${path}${query}`;
-  } catch (e) {
-    // If URL constructor fails, fallback to raw
-    return rawUrl;
+  if (SETTINGS.showCount) {
+    const count = document.createElement("div");
+    count.className = "countBar";
+    count.textContent = `Showing ${items.length} bookmarks`;
+    container.appendChild(count);
   }
+
+  let content;
+
+  const isSortedMode = CURRENT_SORT !== "none";
+
+  if (IS_SEARCH_MODE || isSortedMode) {
+    const base = isSortedMode ? applySort(items) : items;
+    content = renderFlatList(base);
+  } else {
+    const tree = buildFolderTree(items);
+    pruneSingleItemFolders(tree);
+    content = renderFolderTree(tree);
+  }
+
+  container.appendChild(content);
 }
 
-// Remove duplicate bookmarks using normalized URL
-function dedupBookmarks(items) {
-  const seen = new Set();
-  const unique = [];
-  let removedCount = 0;
+// flat list render (for search/sort)
+function renderFlatList(items) {
+  const ul = document.createElement("ul");
+  items.forEach(item => {
+    ul.appendChild(createBookmarkItem(item));
+  });
+  return ul;
+}
 
-  items.forEach(b => {
-    const normalized = normalizeUrl(b.url);
+// render folder tree
+function renderFolderTree(root) {
+  const ul = document.createElement("ul");
+  root.folders.forEach(folderNode => {
+    ul.appendChild(renderFolderNode(folderNode));
+  });
+  return ul;
+}
 
-    if (seen.has(normalized)) {
-      removedCount++;
-    } else {
-      seen.add(normalized);
-      unique.push(b);
-    }
+function renderFolderNode(node) {
+  const li = document.createElement("li");
+  li.className = "folder";
+  li.dataset.path = node.path;
+
+  const header = document.createElement("div");
+  header.className = "folderHeader";
+
+  const expanded = FOLDER_STATE[node.path] !== false;
+
+  const toggle = document.createElement("span");
+  toggle.className = "folderToggle";
+  toggle.textContent = expanded ? "▾" : "▸";
+  header.appendChild(toggle);
+
+  if (SETTINGS.showFolderIcons) {
+    const icon = document.createElement("span");
+    icon.className = "folderIcon";
+    icon.textContent = "📁";
+    header.appendChild(icon);
+  }
+
+  const title = document.createElement("span");
+  title.className = "folderTitle";
+  title.textContent = node.name;
+  header.appendChild(title);
+
+  if (SETTINGS.showCount) {
+    const count = document.createElement("span");
+    count.className = "folderCount";
+    count.textContent = `(${node.totalCount})`;
+    header.appendChild(count);
+  }
+
+  li.appendChild(header);
+
+  const childrenUl = document.createElement("ul");
+  childrenUl.className = "folderChildren";
+
+  node.folders.forEach(childFolder => {
+    childrenUl.appendChild(renderFolderNode(childFolder));
   });
 
-  return { unique, removedCount };
-}
+  node.bookmarks.forEach(b => {
+    childrenUl.appendChild(createBookmarkItem(b));
+  });
 
-// Render list depending on sort mode
-// Normal View → folder structure
-// Sorted View → flat list
-function renderList(items) {
-  const container = document.getElementById('listContainer');
-  container.innerHTML = '';
+  li.appendChild(childrenUl);
 
-  // If sorting is active → show flat list
-  if (CURRENT_SORT !== 'none') {
-    const sorted = applySort(items);
-    const flat = sorted.map(l => ({ title: l.title, url: l.url }));
-    container.appendChild(renderBookmarks(flat));
-    return;
+  if (!expanded) {
+    li.classList.add("collapsed");
   }
 
-  // Otherwise → show folder structure
-  container.appendChild(renderBookmarks(groupByFolders(items)));
+  header.addEventListener("click", () => {
+    const nowExpanded = !li.classList.contains("collapsed");
+    li.classList.toggle("collapsed", nowExpanded);
+    const newState = !nowExpanded;
+    FOLDER_STATE[node.path] = newState;
+    toggle.textContent = newState ? "▾" : "▸";
+  });
+
+  return li;
 }
 
-// Wire up search input (always flat search like Chrome)
-function wireSearch() {
-  const input = document.getElementById('searchInput');
+// favicon url without chrome://
+function getFaviconUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.origin + "/favicon.ico";
+  } catch (e) {
+    return "";
+  }
+}
 
-  input.addEventListener('input', () => {
+// bookmark item
+function createBookmarkItem(item) {
+  const li = document.createElement("li");
+  li.className = "bookmark";
+
+  const row = document.createElement("div");
+  row.className = "bookmarkRow";
+
+  if (SETTINGS.showFavicons) {
+    const img = document.createElement("img");
+    img.className = "favicon";
+    const fav = getFaviconUrl(item.url);
+    if (fav) img.src = fav;
+    img.onerror = () => {
+      img.style.display = "none";
+    };
+    row.appendChild(img);
+  }
+
+  const a = document.createElement("a");
+  a.href = item.url;
+  a.textContent = item.title;
+  a.target = "_blank";
+  row.appendChild(a);
+
+  li.appendChild(row);
+
+  if (SETTINGS.showDateAdded) {
+    const date = document.createElement("div");
+    date.className = "dateAdded";
+    date.textContent = item.dateAdded
+      ? new Date(item.dateAdded).toLocaleDateString()
+      : "";
+    li.appendChild(date);
+  }
+
+  return li;
+}
+
+// search
+function wireSearch() {
+  const input = document.getElementById("searchInput");
+
+  input.addEventListener("input", () => {
     const q = input.value.trim().toLowerCase();
+
+    IS_SEARCH_MODE = q.length > 0;
 
     const filtered = q
       ? ALL_BOOKMARKS.filter(b =>
-          (b.title || '').toLowerCase().includes(q) ||
-          (b.url || '').toLowerCase().includes(q)
+          b.title.toLowerCase().includes(q) ||
+          b.url.toLowerCase().includes(q)
         )
       : ALL_BOOKMARKS;
 
     renderList(filtered);
-    highlightQuery(q);
+    highlight(q);
   });
 }
 
-// Highlight matched query inside links
-function highlightQuery(q) {
+function highlight(q) {
   if (!q) return;
-
-  const anchors = document.querySelectorAll('li.bookmark a');
-  anchors.forEach(a => {
+  document.querySelectorAll("li.bookmark a").forEach(a => {
     const txt = a.textContent;
-    const re = new RegExp(`(${escapeReg(q)})`, 'gi');
-    a.innerHTML = txt.replace(re, '<mark>$1</mark>');
+    const re = new RegExp(`(${escapeReg(q)})`, "gi");
+    a.innerHTML = txt.replace(re, "<mark>$1</mark>");
   });
 }
 
 function escapeReg(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Wire up sort dropdown
+// sort dropdown
 function wireSort() {
-  const select = document.getElementById('sortSelect');
-  if (!select) return;
+  const select = document.getElementById("sortSelect");
 
-  select.addEventListener('change', () => {
+  select.addEventListener("change", () => {
     CURRENT_SORT = select.value;
-    const q = document.getElementById('searchInput').value.trim().toLowerCase();
-
-    const filtered = q
-      ? ALL_BOOKMARKS.filter(b =>
-          (b.title || '').toLowerCase().includes(q) ||
-          (b.url || '').toLowerCase().includes(q)
-        )
-      : ALL_BOOKMARKS;
-
-    renderList(filtered);
-    highlightQuery(q);
+    renderList(ALL_BOOKMARKS);
   });
 }
 
-// Initialize UI after loading Chrome bookmarks
-function initUI(bookmarksTree) {
-  ALL_BOOKMARKS = flattenBookmarks(bookmarksTree);
-  renderList(ALL_BOOKMARKS);
-  wireSearch();
-  wireSort();
-  wireDedup();
-}
-
+// dedup
 function wireDedup() {
-  const btn = document.getElementById('dedupBtn');
-  if (!btn) return;
+  const btn = document.getElementById("dedupBtn");
 
-  btn.addEventListener('click', () => {
-    const { unique, removedCount } = dedupBookmarks(ALL_BOOKMARKS);
+  btn.addEventListener("click", () => {
+    const seen = new Set();
+    const unique = [];
+    let removed = 0;
+
+    ALL_BOOKMARKS.forEach(b => {
+      const key = b.url;
+      if (seen.has(key)) {
+        removed++;
+      } else {
+        seen.add(key);
+        unique.push(b);
+      }
+    });
 
     ALL_BOOKMARKS = unique;
-
-    // بعد از حذف، دوباره رندر کن
     renderList(ALL_BOOKMARKS);
 
-    // پیام نتیجه
-    alert(
-      removedCount === 0
-        ? "No duplicates found."
-        : `Removed ${removedCount} duplicate bookmarks.`
-    );
+    alert(removed === 0 ? "No duplicates found." : `Removed ${removed} duplicates.`);
   });
 }
 
-// Entry point: load Chrome bookmarks
-chrome.bookmarks.getTree(tree => {
-  initUI(tree[0].children);
-});
+// keyboard shortcuts
+function wireShortcuts() {
+  if (!SETTINGS.enableShortcuts) return;
+
+  document.addEventListener("keydown", e => {
+    if (e.ctrlKey && e.key === "f") {
+      document.getElementById("searchInput").focus();
+      e.preventDefault();
+    }
+
+    if (e.ctrlKey && e.key === "d") {
+      const btn = document.getElementById("dedupBtn");
+      if (btn.style.display !== "none") btn.click();
+      e.preventDefault();
+    }
+  });
+}

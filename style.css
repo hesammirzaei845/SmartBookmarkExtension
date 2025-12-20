@@ -1,9 +1,7 @@
-/* Base */
 body {
-  font-family: 'Vazir', 'IranSans', sans-serif;
-  font-weight: 300;
-  font-size: 13px;
-  direction: ltr;           /* UI انگلیسی */
+  font-family: "Inter", "Segoe UI", "Tahoma", "IRANYekan", sans-serif;
+  font-weight: 400;
+  font-size: 14px;
   margin: 0;
   padding: 12px;
   background-color: #ffffff;
@@ -15,7 +13,7 @@ body {
 
 h2 {
   font-size: 15px;
-  font-weight: 400;
+  font-weight: 500;
   margin: 0 0 10px 0;
   text-align: center;
   color: #34495e;
@@ -23,7 +21,6 @@ h2 {
   padding-bottom: 6px;
 }
 
-/* Lists reset */
 ul {
   list-style: none;
   margin: 6px 0 0 0;
@@ -38,6 +35,8 @@ ul {
   border: 1px solid #e3e6e9;
   border-radius: 6px;
   font-size: 13px;
+  background-color: #fff;
+  color: #2c3e50;
 }
 #searchInput:focus {
   outline: 2px solid #b9c4cf;
@@ -52,41 +51,87 @@ ul {
   margin-bottom: 8px;
   font-size: 12px;
 }
-
 #controls label {
   color: #555;
 }
-
 #sortSelect {
   font-size: 12px;
   padding: 4px 6px;
   border: 1px solid #e3e6e9;
   border-radius: 4px;
   background-color: #fff;
+  color: #2c3e50;
 }
 
-/* Folder label */
+.countBar {
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+/* folder tree */
+
 li.folder {
-  font-weight: 400;
-  color: #5f6b76;
-  margin: 8px 0 4px 0;
-  padding: 4px 0;
-  border-bottom: 1px solid #eef1f3;
-}
-
-/* Nested lists under folders */
-li.folder > ul {
   margin-top: 6px;
-  padding-left: 0;
 }
 
-/* Bookmark item */
-li.bookmark {
+.folderHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 4px 0;
-  padding: 6px 8px;
+  gap: 4px;
+  padding: 4px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #5f6b76;
+  font-weight: 500;
+}
+
+.folderHeader:hover {
+  background-color: #f2f4f7;
+}
+
+.folderToggle {
+  font-size: 11px;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+  color: #7b8a97;
+}
+
+.folderIcon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.folderTitle {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folderCount {
+  font-size: 11px;
+  color: #8b98a5;
+  flex-shrink: 0;
+}
+
+.folderChildren {
+  margin-top: 2px;
+  margin-left: 4px;
+  padding-left: 10px;
+  border-left: 1px solid #e3e6e9;
+}
+
+li.folder.collapsed > .folderChildren {
+  display: none;
+}
+
+/* bookmark */
+
+li.bookmark {
+  margin: 2px 0;
+  padding: 4px 6px;
   border-radius: 6px;
   transition: background-color 0.15s ease;
 }
@@ -95,39 +140,53 @@ li.bookmark:hover {
   background-color: #f6f8fa;
 }
 
-/* Link text: truncate and handle mixed languages */
+.bookmarkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* favicon */
+
+.favicon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* link */
+
 li.bookmark a {
-  text-decoration: none;
-  color: #2f3b45;         /* خاکستری تیره، نه آبی تند */
-  font-weight: 400;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: auto;        /* عنوان فارسی/انگلیسی خودکار */
+  color: #2f3b45;
+  text-decoration: none;
+  display: block;
 }
 
 li.bookmark a:hover {
   text-decoration: underline;
 }
 
-/* Accessibility focus */
 li.bookmark a:focus-visible {
   outline: 2px solid #b9c4cf;
   outline-offset: 2px;
 }
 
-/* Compact spacing between groups */
-li + li.folder {
-  margin-top: 10px;
+/* date */
+
+.dateAdded {
+  font-size: 11px;
+  color: #777;
+  margin-top: 2px;
+  margin-left: 24px;
 }
 
-/* Remove any default bullets/indents in nested structures */
-li.folder li.bookmark {
-  margin-left: 0;
-}
+/* dedup button */
 
-/* Dedup button styling */
 #dedupBtn {
   padding: 4px 8px;
   font-size: 12px;
@@ -135,9 +194,91 @@ li.folder li.bookmark {
   background: #fff;
   border-radius: 4px;
   cursor: pointer;
-  margin-left: 8px;
+  color: #2c3e50;
 }
-
 #dedupBtn:hover {
   background: #f0f0f0;
+}
+
+/* compact */
+
+body.compact li.bookmark {
+  padding: 3px 5px;
+  margin: 1px 0;
+}
+body.compact li.bookmark a {
+  font-size: 13px;
+}
+body.compact .dateAdded {
+  font-size: 10px;
+}
+body.compact .folderHeader {
+  padding: 3px 4px;
+}
+
+/* dark theme */
+
+body.dark {
+  background-color: #000000;
+  color: #f0f0f0;
+}
+body.dark h2 {
+  color: #dddddd;
+  border-bottom: 1px solid #333;
+}
+body.dark #searchInput {
+  background-color: #1a1a1a;
+  color: #f0f0f0;
+  border: 1px solid #444;
+}
+body.dark #searchInput:focus {
+  outline: 2px solid #666;
+}
+body.dark #controls label {
+  color: #cccccc;
+}
+body.dark #sortSelect {
+  background-color: #1a1a1a;
+  color: #f0f0f0;
+  border: 1px solid #444;
+}
+body.dark #sortSelect:hover {
+  background-color: #2a2a2a;
+}
+body.dark #dedupBtn {
+  background-color: #1a1a1a;
+  color: #f0f0f0;
+  border: 1px solid #444;
+}
+body.dark #dedupBtn:hover {
+  background-color: #2a2a2a;
+}
+body.dark li.folder .folderHeader {
+  color: #bbbbbb;
+}
+body.dark .folderChildren {
+  border-left: 1px solid #333;
+}
+body.dark li.bookmark:hover {
+  background-color: #1a1a1a;
+}
+body.dark li.bookmark a {
+  color: #f0f0f0;
+}
+body.dark li.bookmark a:hover {
+  color: #ffffff;
+}
+body.dark .dateAdded {
+  color: #aaaaaa;
+}
+body.dark .countBar {
+  color: #cccccc;
+}
+
+body.dark ::-webkit-scrollbar {
+  width: 8px;
+}
+body.dark ::-webkit-scrollbar-thumb {
+  background-color: #444;
+  border-radius: 4px;
 }
