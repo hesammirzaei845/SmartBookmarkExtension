@@ -17,18 +17,31 @@
     autocomplete="off"
   />
 
-  <!-- Sort dropdown -->
+  <!-- Controls -->
   <div id="controls">
-    <label for="sortSelect">Sort:</label>
-    <select id="sortSelect">
-      <option value="none" selected>No sorting</option>
-      <option value="title-asc">Title A → Z</option>
-      <option value="title-desc">Title Z → A</option>
-      <option value="date-desc">Newest first</option>
-      <option value="date-asc">Oldest first</option>
-    </select>
 
-    <button id="dedupBtn">Remove duplicates</button>
+    <div class="controlsTop">
+      <!-- View toggle -->
+      <div class="viewToggle">
+        <button id="viewFoldersBtn">Folders</button>
+        <button id="viewTagsBtn">Tags</button>
+      </div>
+
+      <!-- Sort -->
+      <select id="sortSelect">
+        <option value="none" selected>No sorting</option>
+        <option value="title-asc">Title A → Z</option>
+        <option value="title-desc">Title Z → A</option>
+        <option value="date-desc">Newest first</option>
+        <option value="date-asc">Oldest first</option>
+      </select>
+
+      <!-- Dedup -->
+      <button id="dedupBtn">Remove duplicates</button>
+    </div>
+
+    <!-- Tag filter bar (auto-filled by JS) -->
+    <div class="tagFilterBar" id="tagFilterBar"></div>
   </div>
 
   <!-- Container for bookmarks -->

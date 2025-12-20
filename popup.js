@@ -15,6 +15,8 @@ let ALL_BOOKMARKS = [];
 let CURRENT_SORT = "none";
 let IS_SEARCH_MODE = false;
 let FOLDER_STATE = {};
+let VIEW_MODE = "folders"; // "folders" | "tags"
+let SELECTED_TAGS = new Set();
 
 // load bookmarks and settings
 chrome.bookmarks.getTree(tree => {
@@ -23,11 +25,17 @@ chrome.bookmarks.getTree(tree => {
   chrome.storage.local.get(Object.keys(SETTINGS), data => {
     SETTINGS = { ...SETTINGS, ...data };
     applySettings();
+    // assign tags after settings are loaded and rules are defined
+    ALL_BOOKMARKS = ALL_BOOKMARKS.map(b => ({
+      ...b,
+      tags: autoDetectTags(b)
+    }));
     renderList(ALL_BOOKMARKS);
     wireSearch();
     wireSort();
     wireDedup();
     wireShortcuts();
+    wireViewMode();
   });
 });
 
@@ -50,7 +58,7 @@ function flatten(nodes, acc = [], path = []) {
   return acc;
 }
 
-// apply settings to popup UI
+// settings
 function applySettings() {
   const body = document.body;
 
@@ -62,14 +70,89 @@ function applySettings() {
 
   body.classList.toggle("compact", SETTINGS.compactMode);
 
-  document.getElementById("controls").style.display =
-    SETTINGS.enableSorting ? "flex" : "none";
+  const controls = document.getElementById("controls");
+  controls.style.display = SETTINGS.enableSorting ? "flex" : "none";
 
   document.getElementById("dedupBtn").style.display =
     SETTINGS.enableDedup ? "inline-block" : "none";
 }
 
-// build folder tree structure from flat list
+// tag rules
+const TAG_RULES = {
+  Email: {
+    hostname: ["mail", "gmail", "outlook", "yahoo"],
+    path: ["inbox", "mail"],
+    title: ["inbox", "email"]
+  },
+  Video: {
+    hostname: ["video", "media", "tv", "film", "aparat", "namasha", "youtube", "vimeo"],
+    path: ["watch", "video", "v/"],
+    title: ["video", "watch", "تماشا", "فیلم"]
+  },
+  Gaming: {
+    hostname: ["steam", "epic", "rockstar", "cdprojekt", "game"],
+    path: ["game", "play"],
+    title: ["game", "gaming"]
+  },
+  Wallpapers: {
+    hostname: ["wallpaper", "unsplash", "wallhaven"],
+    path: ["wallpaper", "image", "photo"],
+    title: ["wallpaper", "background"]
+  },
+  Software: {
+    hostname: ["soft98", "filehippo"],
+    path: ["download"],
+    title: ["download", "software"]
+  },
+  Shopping: {
+    hostname: ["shop", "store", "market", "buy", "sheypoor", "divar", "digikala"],
+    path: ["shop", "store"],
+    title: ["buy", "shopping"]
+  },
+  AI: {
+    hostname: ["openai", "chatgpt", "bard"],
+    path: ["chat"],
+    title: ["ai", "chatgpt"]
+  },
+  Programming: {
+    hostname: ["github", "stackoverflow", "gitlab"],
+    path: ["code"],
+    title: ["code", "programming"]
+  }
+};
+
+function autoDetectTags(bookmark) {
+  const tags = new Set();
+
+  try {
+    const url = new URL(bookmark.url);
+    const hostname = url.hostname.toLowerCase();
+    const path = url.pathname.toLowerCase();
+    const title = (bookmark.title || "").toLowerCase();
+
+    for (const [tag, rules] of Object.entries(TAG_RULES)) {
+      let matched = false;
+
+      if (rules.hostname.some(key => hostname.includes(key))) matched = true;
+      else if (rules.path.some(key => path.includes(key))) matched = true;
+      else if (rules.title.some(key => title.includes(key))) matched = true;
+
+      if (matched) {
+        tags.add(tag);
+      }
+    }
+  } catch (e) {
+    // ignore invalid URLs
+  }
+
+  if (tags.size === 0) {
+    tags.add("Other");
+  }
+
+  return Array.from(tags);
+}
+
+// folder tree
 function buildFolderTree(items) {
   const root = {
     name: "root",
@@ -122,12 +205,10 @@ function buildFolderTree(items) {
 function pruneSingleItemFolders(node) {
   if (!node || !node.folders) return;
 
-  // اول زیرپوشه‌ها رو پاکسازی کن (بازگشتی)
-  node.folders.forEach((child, name) => {
+  node.folders.forEach(child => {
     pruneSingleItemFolders(child);
   });
 
-  // حالا پوشه‌های یک‌موردی رو حذف کن
   const toDelete = [];
 
   node.folders.forEach((child, name) => {
@@ -135,13 +216,11 @@ function pruneSingleItemFolders(node) {
     const hasOneBookmark = child.bookmarks.length === 1;
 
     if (!hasSubfolders && hasOneBookmark) {
-      // انتقال بوکمارک به والد
       node.bookmarks.push(child.bookmarks[0]);
       toDelete.push(name);
     }
   });
 
-  // حذف پوشه‌های یک‌موردی
   toDelete.forEach(name => {
     node.folders.delete(name);
   });
@@ -159,7 +238,7 @@ function findFolderByPath(root, path) {
   return node;
 }
 
-// sorting flat list
+// sorting
 function applySort(items) {
   const sorted = [...items];
 
@@ -195,6 +274,18 @@ function renderList(items) {
   if (IS_SEARCH_MODE || isSortedMode) {
     const base = isSortedMode ? applySort(items) : items;
     content = renderFlatList(base);
+  } else if (VIEW_MODE === "tags") {
+
+    // filter items by selected tags
+    let filtered = items;
+    if (SELECTED_TAGS.size > 0) {
+      filtered = items.filter(item => {
+        const tags = item.tags && item.tags.length ? item.tags : ["Other"];
+        return tags.some(t => SELECTED_TAGS.has(t));
+      });
+    }
+
+    content = renderTagView(filtered);
   } else {
     const tree = buildFolderTree(items);
     pruneSingleItemFolders(tree);
@@ -213,7 +304,104 @@ function renderFlatList(items) {
   return ul;
 }
 
-// render folder tree
+// tag view render
+function renderTagView(items) {
+  const ul = document.createElement("ul");
+  ul.className = "tagView";
+
+  const tagMap = new Map();
+
+  items.forEach(item => {
+    const tags = item.tags && item.tags.length ? item.tags : ["Other"];
+    tags.forEach(tag => {
+      if (SELECTED_TAGS.size > 0 && !SELECTED_TAGS.has(tag)) return;
+
+      if (!tagMap.has(tag)) {
+        tagMap.set(tag, []);
+      }
+      tagMap.get(tag).push(item);
+    });
+  });
+
+  const sortedTags = Array.from(tagMap.keys()).sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  sortedTags.forEach(tag => {
+    const tagLi = document.createElement("li");
+    tagLi.className = "tagGroup";
+
+    const header = document.createElement("div");
+    header.className = "tagHeader";
+    header.textContent = `${tag} (${tagMap.get(tag).length})`;
+    tagLi.appendChild(header);
+
+    const list = document.createElement("ul");
+    tagMap.get(tag).forEach(item => {
+      list.appendChild(createBookmarkItem(item));
+    });
+
+    tagLi.appendChild(list);
+    ul.appendChild(tagLi);
+  });
+
+  renderTagFilters(items);
+
+  return ul;
+}
+
+function renderTagFilters(items) {
+  // If not in tag mode, clear and exit
+  if (VIEW_MODE !== "tags") {
+    const bar = document.getElementById("tagFilterBar");
+    if (bar) bar.innerHTML = "";
+    return;
+  }
+
+  const controls = document.getElementById("controls");
+  let tagFilterBar = document.getElementById("tagFilterBar");
+
+  if (!tagFilterBar) {
+    tagFilterBar = document.createElement("div");
+    tagFilterBar.id = "tagFilterBar";
+    tagFilterBar.className = "tagFilterBar";
+    controls.appendChild(tagFilterBar);
+  }
+
+  tagFilterBar.innerHTML = "";
+
+  const allTags = new Set();
+  items.forEach(item => {
+    const tags = item.tags && item.tags.length ? item.tags : ["Other"];
+    tags.forEach(t => allTags.add(t));
+  });
+
+  const sorted = Array.from(allTags).sort((a, b) => a.localeCompare(b));
+
+  sorted.forEach(tag => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tagFilterButton";
+    btn.textContent = tag;
+
+    if (SELECTED_TAGS.has(tag)) {
+      btn.classList.add("active");
+    }
+
+    btn.addEventListener("click", () => {
+      if (SELECTED_TAGS.has(tag)) {
+        SELECTED_TAGS.delete(tag);
+      } else {
+        SELECTED_TAGS.add(tag);
+      }
+      renderList(ALL_BOOKMARKS);
+    });
+
+    tagFilterBar.appendChild(btn);
+  });
+}
+
+// folder tree render
 function renderFolderTree(root) {
   const ul = document.createElement("ul");
   root.folders.forEach(folderNode => {
@@ -286,7 +474,7 @@ function renderFolderNode(node) {
   return li;
 }
 
-// favicon url without chrome://
+// favicon
 function getFaviconUrl(url) {
   try {
     const u = new URL(url);
@@ -421,4 +609,106 @@ function wireShortcuts() {
       e.preventDefault();
     }
   });
+}
+
+// view mode toggle
+function wireViewMode() {
+  const controls = document.getElementById("controls");
+
+  // clear old content
+  controls.innerHTML = "";
+
+  // create left + right containers
+  const left = document.createElement("div");
+  left.id = "controlsLeft";
+
+  const right = document.createElement("div");
+  right.id = "controlsRight";
+
+  // ----- VIEW TOGGLE (Folders / Tags) -----
+  const toggle = document.createElement("div");
+  toggle.className = "viewToggle";
+
+  const btnFolders = document.createElement("button");
+  btnFolders.textContent = "Folders";
+  const btnTags = document.createElement("button");
+  btnTags.textContent = "Tags";
+
+  const sync = () => {
+    if (VIEW_MODE === "folders") {
+      const tagBar = document.getElementById("tagFilterBar");
+if (tagBar) tagBar.innerHTML = "";
+      btnFolders.classList.add("active");
+      btnTags.classList.remove("active");
+    } else {
+      btnTags.classList.add("active");
+      btnFolders.classList.remove("active");
+    }
+  };
+
+  btnFolders.addEventListener("click", () => {
+    VIEW_MODE = "folders";
+    SELECTED_TAGS.clear();
+    sync();
+    renderList(ALL_BOOKMARKS);
+  });
+
+  btnTags.addEventListener("click", () => {
+    VIEW_MODE = "tags";
+    sync();
+    renderList(ALL_BOOKMARKS);
+  });
+
+  toggle.appendChild(btnFolders);
+  toggle.appendChild(btnTags);
+  sync();
+
+  left.appendChild(toggle);
+
+  // ----- SORT SELECT -----
+  const sortSelect = document.createElement("select");
+  sortSelect.id = "sortSelect";
+  sortSelect.innerHTML = `
+    <option value="none">No sorting</option>
+    <option value="title-asc">Title A–Z</option>
+    <option value="title-desc">Title Z–A</option>
+    <option value="date-desc">Newest first</option>
+    <option value="date-asc">Oldest first</option>
+  `;
+  sortSelect.addEventListener("change", () => {
+    CURRENT_SORT = sortSelect.value;
+    renderList(ALL_BOOKMARKS);
+  });
+
+  // ----- DEDUP BUTTON -----
+  const dedupBtn = document.createElement("button");
+  dedupBtn.id = "dedupBtn";
+  dedupBtn.textContent = "Remove duplicates";
+  dedupBtn.addEventListener("click", () => {
+    const seen = new Set();
+    const unique = [];
+    let removed = 0;
+
+    ALL_BOOKMARKS.forEach(b => {
+      const key = b.url;
+      if (seen.has(key)) {
+        removed++;
+      } else {
+        seen.add(key);
+        unique.push(b);
+      }
+    });
+
+    ALL_BOOKMARKS = unique;
+    renderList(ALL_BOOKMARKS);
+
+    alert(removed === 0 ? "No duplicates found." : `Removed ${removed} duplicates.`);
+  });
+
+  right.appendChild(sortSelect);
+  right.appendChild(dedupBtn);
+
+  // attach both sides
+  controls.appendChild(left);
+  controls.appendChild(right);
 }
