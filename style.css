@@ -1,4 +1,14 @@
 /* base layout */
+html,
+body {
+  width: 320px;
+  min-height: 220px;
+  max-height: 600px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* LIGHT MODE BASE */
 body {
   font-family: "Inter", "Segoe UI", "Tahoma", "IRANYekan", sans-serif;
   font-weight: 400;
@@ -7,11 +17,9 @@ body {
   padding: 12px;
   background-color: #ffffff;
   color: #2c3e50;
-  width: 320px;
-  min-height: 220px;
-  box-sizing: border-box;
 }
 
+/* HEADER */
 h2 {
   font-size: 15px;
   font-weight: 500;
@@ -22,13 +30,14 @@ h2 {
   padding-bottom: 6px;
 }
 
+/* LIST RESET */
 ul {
   list-style: none;
   margin: 6px 0 0 0;
   padding: 0;
 }
 
-/* search */
+/* SEARCH */
 #searchInput {
   width: 100%;
   box-sizing: border-box;
@@ -45,7 +54,7 @@ ul {
   outline-offset: 1px;
 }
 
-/* controls bar */
+/* CONTROLS */
 #controls {
   display: flex;
   flex-direction: column;
@@ -54,7 +63,6 @@ ul {
   font-size: 12px;
 }
 
-/* top row: view toggle + sort + dedup */
 .controlsTop {
   display: flex;
   align-items: center;
@@ -62,21 +70,7 @@ ul {
   gap: 6px;
 }
 
-/* left controls: view toggle (legacy, harmless) */
-#controlsLeft {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* right controls: sort + dedup (legacy, harmless) */
-#controlsRight {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* sort */
+/* SORT */
 #sortSelect {
   font-size: 12px;
   padding: 4px 6px;
@@ -86,7 +80,7 @@ ul {
   color: #2c3e50;
 }
 
-/* dedup */
+/* DEDUP */
 #dedupBtn {
   padding: 4px 8px;
   font-size: 12px;
@@ -100,7 +94,7 @@ ul {
   background: #f0f0f0;
 }
 
-/* view toggle (two‑way switch) */
+/* VIEW TOGGLE */
 .viewToggle {
   display: flex;
   border: 1px solid #d0d4d8;
@@ -108,7 +102,7 @@ ul {
   overflow: hidden;
   height: 26px;
   flex-shrink: 0;
-  width: 100px; /* ثابت و جمع‌وجور */
+  width: 100px;
 }
 
 .viewToggle button {
@@ -120,54 +114,92 @@ ul {
   color: #2c3e50;
   padding: 0;
 }
-
 .viewToggle button:hover {
   background: #e8eaec;
 }
-
 .viewToggle button.active {
   background: #2c3e50;
   color: #ffffff;
 }
 
-/* count bar */
+/* COUNT BAR */
 .countBar {
   font-size: 12px;
   color: #555;
   margin-bottom: 8px;
 }
 
-/* folder tree */
+/* FOLDER TREE */
 li.folder {
-  margin-top: 6px;
+  margin-top: 10px;
+  padding-bottom: 2px;
 }
 
 .folderHeader {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 4px;
-  border-radius: 4px;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 6px;
   cursor: pointer;
   color: #5f6b76;
   font-weight: 500;
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
-
 .folderHeader:hover {
-  background-color: #f2f4f7;
+  background-color: #f4f6f8;
+  box-shadow: inset 0 0 0 1px #e3e6e9;
 }
 
+/* FOLDER TOGGLE (caret) – polished rotation */
 .folderToggle {
   font-size: 11px;
   width: 14px;
   text-align: center;
   flex-shrink: 0;
   color: #7b8a97;
+  display: inline-block;
+  transition: transform 0.28s cubic-bezier(0.25, 1.3, 0.5, 1);
+}
+li.folder.collapsed .folderToggle {
+  transform: rotate(-90deg);
 }
 
+/* FOLDER ICON */
 .folderIcon {
-  font-size: 14px;
+  width: 16px;
+  height: 14px;
+  display: inline-block;
+  position: relative;
   flex-shrink: 0;
+}
+.folderIcon::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 16px;
+  height: 10px;
+  background-color: #d8dee4;
+  border-radius: 2px;
+}
+.folderIcon::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 2px;
+  width: 10px;
+  height: 6px;
+  background-color: #e2e8ef;
+  border-radius: 2px 2px 0 0;
+}
+.folderHeader:hover .folderIcon::before {
+  background-color: #cfd6dd;
+}
+.folderHeader:hover .folderIcon::after {
+  background-color: #dce2e8;
 }
 
 .folderTitle {
@@ -183,25 +215,52 @@ li.folder {
   flex-shrink: 0;
 }
 
+/* CHILDREN – base + smooth expand/collapse + basic indent */
+/* FOLDER CHILDREN – smooth expand/collapse */
 .folderChildren {
-  margin-top: 2px;
-  margin-left: 14px;
+  margin-top: 6px;
+  margin-left: 16px;
   padding-left: 10px;
   border-left: 1px solid #e3e6e9;
+
+  overflow: hidden;
+
+  /* مقدار بزرگ برای انیمیشن */
+  max-height: 1200px;
+
+  transition:
+    max-height 0.28s ease,
+    opacity 0.22s ease;
 }
 
+/* collapsed */
 li.folder.collapsed > .folderChildren {
-  display: none;
+  max-height: 0;
+  opacity: 0;
 }
 
-/* bookmark */
+/* fade + slide for items */
+.folderChildren > * {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
+}
+
+li.folder.collapsed > .folderChildren > * {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+
+/* BOOKMARK */
 li.bookmark {
-  margin: 2px 0;
+  margin: 4px 0;
   padding: 4px 6px;
   border-radius: 6px;
   transition: background-color 0.15s ease;
 }
-
 li.bookmark:hover {
   background-color: #f6f8fa;
 }
@@ -213,14 +272,12 @@ li.bookmark:hover {
   width: 100%;
 }
 
-/* favicon */
 .favicon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
 }
 
-/* link */
 li.bookmark a {
   flex: 1;
   overflow: hidden;
@@ -230,17 +287,25 @@ li.bookmark a {
   text-decoration: none;
   display: block;
 }
-
 li.bookmark a:hover {
   text-decoration: underline;
 }
 
-li.bookmark a:focus-visible {
-  outline: 2px solid #b9c4cf;
-  outline-offset: 2px;
+/* BOOKMARK fade when folder opens */
+.folderChildren li.bookmark {
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
 }
 
-/* date */
+li.folder:not(.collapsed) .folderChildren li.bookmark {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* DATE */
 .dateAdded {
   font-size: 11px;
   color: #777;
@@ -248,7 +313,7 @@ li.bookmark a:focus-visible {
   margin-left: 24px;
 }
 
-/* tag filter bar */
+/* TAG FILTER */
 .tagFilterBar {
   display: flex;
   flex-wrap: wrap;
@@ -263,31 +328,31 @@ li.bookmark a:focus-visible {
   border: 1px solid #d0d4d8;
   border-radius: 12px;
   background-color: #f5f6f7;
-  color: #888888; /* کم‌رنگ‌تر */
+  color: #888888;
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
-
 .tagFilterButton:hover {
   background-color: #e8eaec;
 }
-
 .tagFilterButton.active {
   background-color: #2c3e50;
   color: #ffffff;
   border-color: #2c3e50;
 }
 
-/* tag view layout */
+/* TAG VIEW */
 .tagView {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .tagGroup {
-  border-top: 1px solid #e3e6e9;
-  padding-top: 6px;
+  padding: 6px 6px 4px 6px;
+  border-radius: 6px;
+  border: 1px solid #e3e6e9;
+  background-color: #fafbfc;
 }
 
 .tagHeader {
@@ -297,7 +362,27 @@ li.bookmark a:focus-visible {
   margin-bottom: 4px;
 }
 
-/* compact mode */
+/* COMPACT MODE */
+body.compact li.folder {
+  margin-top: 6px;
+}
+body.compact .folderChildren {
+  margin-top: 4px;
+  margin-left: 12px;
+  padding-left: 8px;
+}
+body.compact .folderChildren.depth-1 {
+  margin-left: 12px;
+}
+body.compact .folderChildren.depth-2 {
+  margin-left: 22px;
+}
+body.compact .folderChildren.depth-3 {
+  margin-left: 32px;
+}
+body.compact .folderHeader {
+  padding: 3px 4px;
+}
 body.compact li.bookmark {
   padding: 3px 5px;
   margin: 1px 0;
@@ -308,96 +393,258 @@ body.compact li.bookmark a {
 body.compact .dateAdded {
   font-size: 10px;
 }
-body.compact .folderHeader {
-  padding: 3px 4px;
-}
 body.compact .tagFilterButton {
   padding: 2px 6px;
   font-size: 10px;
 }
 
-/* dark theme */
+/* DARK MODE — polished, with ONLY the main background black */
 body.dark {
-  background-color: #000000;
-  color: #f0f0f0;
+  background-color: #000000; /* فقط زمینه کلی */
+  color: #e6e6e6;
 }
 
+/* HEADER */
 body.dark h2 {
-  color: #dddddd;
+  color: #e0e0e0;
   border-bottom: 1px solid #333;
 }
 
+/* SEARCH */
 body.dark #searchInput {
-  background-color: #1a1a1a;
+  background-color: #1a1a1a;   /* روشن‌تر از قبل */
   color: #f0f0f0;
-  border: 1px solid #444;
+  border: 1px solid #3a3a3a;
+}
+body.dark #searchInput:focus {
+  outline: 2px solid #3a82f7;
 }
 
-body.dark #sortSelect {
-  background-color: #1a1a1a;
-  color: #f0f0f0;
-  border: 1px solid #444;
-}
-
+/* SORT + BUTTONS */
+body.dark #sortSelect,
 body.dark #dedupBtn {
-  background-color: #1a1a1a;
-  color: #f0f0f0;
-  border: 1px solid #444;
+  background-color: #1a1a1a;   /* روشن‌تر و ملایم‌تر */
+  color: #e6e6e6;
+  border: 1px solid #3a3a3a;
+}
+body.dark #dedupBtn:hover {
+  background-color: #222222;
 }
 
+/* VIEW TOGGLE */
 body.dark .viewToggle {
-  border-color: #444;
+  border-color: #3a3a3a;
 }
-
 body.dark .viewToggle button {
   background-color: #1a1a1a;
-  color: #f0f0f0;
+  color: #e6e6e6;
 }
-
+body.dark .viewToggle button:hover {
+  background-color: #262626;
+}
 body.dark .viewToggle button.active {
-  background-color: #f0f0f0;
-  color: #000000;
+  background-color: #3a82f7;
+  color: #ffffff;
 }
 
-body.dark .tagFilterButton {
-  background-color: #1a1a1a;
-  color: #f0f0f0;
-  border-color: #444;
+/* FOLDER HEADER */
+body.dark .folderHeader {
+  color: #e6e6e6;
+  background-color: #141414; /* subtle */
+}
+body.dark .folderHeader:hover {
+  background-color: #1f1f1f; /* روشن‌تر */
+  box-shadow: inset 0 0 0 1px #333;
 }
 
-body.dark .tagFilterButton.active {
-  background-color: #f0f0f0;
-  color: #000000;
+/* FOLDER ICON */
+body.dark .folderIcon::before {
+  background-color: #4a4a4a;
+}
+body.dark .folderIcon::after {
+  background-color: #5a5a5a;
+}
+body.dark .folderHeader:hover .folderIcon::before {
+  background-color: #5c5c5c;
+}
+body.dark .folderHeader:hover .folderIcon::after {
+  background-color: #6a6a6a;
 }
 
+/* FOLDER CHILDREN – dark borders for all depths */
 body.dark .folderChildren {
-  border-left: 1px solid #333;
+  border-left: 1px solid #3a3a3a;
 }
 
-body.dark .tagHeader {
-  color: #dddddd;
+/* BOOKMARK */
+body.dark li.bookmark {
+  background-color: transparent;
 }
-
+body.dark li.bookmark:hover {
+  background-color: #1a1a1a; /* روشن‌تر و ملایم */
+}
 body.dark li.bookmark a {
   color: #ffffff;
 }
 
-body.dark .folderHeader {
-  color: #f0f0f0;
+/* TAG GROUP */
+body.dark .tagGroup {
+  background-color: #141414; /* روشن‌تر از قبل */
+  border-color: #333;
+}
+body.dark .tagGroup:hover {
+  background-color: #1a1a1a;
+}
+body.dark .tagHeader {
+  color: #e0e0e0;
 }
 
-body.dark .folderCount {
+/* TAG BUTTONS (حباب‌ها) */
+body.dark .tagFilterButton {
+  background-color: #1f1f1f;   /* روشن‌تر و ملایم‌تر */
+  color: #d0d0d0;
+  border-color: #3a3a3a;
+}
+body.dark .tagFilterButton:hover {
+  background-color: #262626;   /* hover روشن‌تر */
+}
+body.dark .tagFilterButton.active {
+  background-color: #3a82f7;
+  color: #ffffff;
+  border-color: #3a82f7;
+}
+
+/* BREADCRUMB */
+body.dark #breadcrumb {
   color: #cccccc;
 }
-
-body.dark .dateAdded {
-  color: #bbbbbb;
+body.dark #breadcrumb span {
+  color: #4da3ff;
+}
+body.dark #breadcrumb .sep {
+  color: #666;
 }
 
-body.dark .tagHeader {
+/* PIN BUTTON */
+.folderPinBtn {
+  cursor: pointer;
+  margin-left: 6px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.folderPinBtn:hover {
+  opacity: 1;
+}
+
+/* BREADCRUMB ITEMS */
+.crumb {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crumb.clickable {
+  cursor: pointer;
+  color: var(--accent);
+}
+.crumb.clickable:hover {
+  text-decoration: underline;
+}
+.crumbSep {
+  opacity: 0.6;
+}
+.crumb.current {
+  font-weight: 600;
+}
+
+/* Tag edit button */
+.tagEditBtn {
+  font-size: 12px;
+  padding: 2px 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  border-radius: 4px;
+}
+.tagEditBtn:hover {
+  opacity: 1;
+  background-color: #e8eaec;
+}
+
+/* Tag editor popup */
+.tagEditor {
+  margin-top: 4px;
+  padding: 6px;
+  border: 1px solid #d0d4d8;
+  border-radius: 6px;
+  background: #f5f6f7;
+}
+
+.tagEditorInput {
+  width: 100%;
+  padding: 4px 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.tagEditorList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tagChip {
+  background: #d0d4d8;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tagChipRemove {
+  cursor: pointer;
+  opacity: 0.7;
+}
+.tagChipRemove:hover {
+  opacity: 1;
+}
+
+/* DARK MODE — Tag edit button */
+body.dark .tagEditBtn {
+  color: #e0e0e0;
+  background-color: transparent;
+}
+body.dark .tagEditBtn:hover {
+  background-color: #1f1f1f;
+}
+
+/* DARK MODE — Tag editor popup */
+body.dark .tagEditor {
+  background-color: #141414;
+  border-color: #333;
+}
+
+/* DARK MODE — Tag editor input */
+body.dark .tagEditorInput {
+  background-color: #1a1a1a;
   color: #f0f0f0;
+  border: 1px solid #3a3a3a;
+}
+body.dark .tagEditorInput:focus {
+  outline: 2px solid #3a82f7;
 }
 
-body.dark .countBar {
-  color: #dddddd;
+/* DARK MODE — Tag chips */
+body.dark .tagChip {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+}
+body.dark .tagChipRemove {
+  color: #cccccc;
+}
+body.dark .tagChipRemove:hover {
+  color: #ffffff;
 }

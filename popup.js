@@ -6,78 +6,137 @@ let SETTINGS = {
   showDateAdded: false,
   showCount: true,
   compactMode: false,
-  enableShortcuts: true,
-  fontSize: "medium",
-  theme: "light"
+  fontSize: "medium", // "small" | "medium" | "large"
+  theme: "light"      // "light" | "dark"
 };
 
 let ALL_BOOKMARKS = [];
-let CURRENT_SORT = "none";
+let CURRENT_SORT = "none";       
 let IS_SEARCH_MODE = false;
-let FOLDER_STATE = {};
-let VIEW_MODE = "folders"; // "folders" | "tags"
-let SELECTED_TAGS = new Set();
+let VIEW_MODE = "folders";       // "folders" | "tags"
+let SELECTED_TAGS = new Set();   // active tag filters
+let FOLDER_STATE = {};           // { "Folder / Sub": true/false } expanded (true) / collapsed (false)
+let PINNED_FOLDERS = new Set();  // Set of folder.path strings
+let CURRENT_FOLDER_PATH = ""; // مسیر فولدر فعال
+let TAG_DATA = {
+  tagsByBookmarkId: {}, // { [bookmarkId]: string[] }
+  allTags: []           // string[]
+};
 
-// load bookmarks and settings
+// Initialization
+
 chrome.bookmarks.getTree(tree => {
   ALL_BOOKMARKS = flatten(tree[0].children);
 
   chrome.storage.local.get(Object.keys(SETTINGS), data => {
     SETTINGS = { ...SETTINGS, ...data };
     applySettings();
-    // assign tags after settings are loaded and rules are defined
-    ALL_BOOKMARKS = ALL_BOOKMARKS.map(b => ({
-      ...b,
-      tags: autoDetectTags(b)
-    }));
-    renderList(ALL_BOOKMARKS);
-    wireSearch();
-    wireSort();
-    wireDedup();
-    wireShortcuts();
-    wireViewMode();
+
+    chrome.storage.sync.get(["TAG_DATA"], dataTags => {
+      const stored = dataTags.TAG_DATA;
+      const storedTagsById =
+        stored && stored.tagsByBookmarkId && typeof stored.tagsByBookmarkId === "object"
+          ? stored.tagsByBookmarkId
+          : {};
+
+      const initialAllTags =
+        stored && Array.isArray(stored.allTags)
+          ? new Set(stored.allTags)
+          : new Set();
+
+      ALL_BOOKMARKS = ALL_BOOKMARKS.map(b => {
+        let tags = storedTagsById[b.id];
+
+        if (!Array.isArray(tags) || tags.length === 0) {
+          tags = autoDetectTags(b);
+        }
+
+        tags.forEach(t => initialAllTags.add(t));
+
+        return {
+          ...b,
+          tags
+        };
+      });
+
+      TAG_DATA = {
+        tagsByBookmarkId: Object.fromEntries(
+          ALL_BOOKMARKS.map(b => [b.id, b.tags])
+        ),
+        allTags: Array.from(initialAllTags)
+      };
+
+      chrome.storage.local.get(["PINNED_FOLDERS"], data2 => {
+        if (Array.isArray(data2.PINNED_FOLDERS)) {
+          PINNED_FOLDERS = new Set(data2.PINNED_FOLDERS);
+        }
+
+        wireControls();
+        wireSearch();
+        renderList(ALL_BOOKMARKS);
+      });
+    });
   });
 });
 
-// flatten bookmark tree to flat list
-function flatten(nodes, acc = [], path = []) {
-  nodes.forEach(n => {
-    const currentPath = n.title ? [...path, n.title] : path;
 
-    if (n.url) {
+// =========================
+// Helpers: flatten bookmarks
+// =========================
+
+function flatten(nodes, acc = [], path = []) {
+  nodes.forEach(node => {
+    const currentPath = node.title ? [...path, node.title] : path;
+
+    if (node.url) {
       acc.push({
-        title: n.title || n.url,
-        url: n.url,
+        id: node.id,
+        title: node.title || node.url,
+        url: node.url,
         path: currentPath.join(" / "),
-        dateAdded: n.dateAdded || 0
+        dateAdded: node.dateAdded || 0
       });
-    } else if (n.children) {
-      flatten(n.children, acc, currentPath);
+    } else if (node.children) {
+      flatten(node.children, acc, currentPath);
     }
   });
   return acc;
 }
 
-// settings
+// =========================
+// Settings
+// =========================
+
 function applySettings() {
   const body = document.body;
 
+  // theme
   body.classList.toggle("dark", SETTINGS.theme === "dark");
 
+  // font size
   body.style.fontSize =
     SETTINGS.fontSize === "small" ? "12px" :
     SETTINGS.fontSize === "large" ? "16px" : "14px";
 
+  // compact mode
   body.classList.toggle("compact", SETTINGS.compactMode);
 
-  const controls = document.getElementById("controls");
-  controls.style.display = SETTINGS.enableSorting ? "flex" : "none";
+  // controls visibility (sorting/dedup)
+  const sortSelect = document.getElementById("sortSelect");
+  if (sortSelect) {
+    sortSelect.style.display = SETTINGS.enableSorting ? "inline-block" : "none";
+  }
 
-  document.getElementById("dedupBtn").style.display =
-    SETTINGS.enableDedup ? "inline-block" : "none";
+  const dedupBtn = document.getElementById("dedupBtn");
+  if (dedupBtn) {
+    dedupBtn.style.display = SETTINGS.enableDedup ? "inline-block" : "none";
+  }
 }
 
-// tag rules
+// =========================
+// Tag rules and auto-tagging
+// =========================
+
 const TAG_RULES = {
   Email: {
     hostname: ["mail", "gmail", "outlook", "yahoo"],
@@ -133,13 +192,11 @@ function autoDetectTags(bookmark) {
     for (const [tag, rules] of Object.entries(TAG_RULES)) {
       let matched = false;
 
-      if (rules.hostname.some(key => hostname.includes(key))) matched = true;
-      else if (rules.path.some(key => path.includes(key))) matched = true;
-      else if (rules.title.some(key => title.includes(key))) matched = true;
+      if (rules.hostname && rules.hostname.some(key => hostname.includes(key))) matched = true;
+      else if (rules.path && rules.path.some(key => path.includes(key))) matched = true;
+      else if (rules.title && rules.title.some(key => title.includes(key))) matched = true;
 
-      if (matched) {
-        tags.add(tag);
-      }
+      if (matched) tags.add(tag);
     }
   } catch (e) {
     // ignore invalid URLs
@@ -152,7 +209,105 @@ function autoDetectTags(bookmark) {
   return Array.from(tags);
 }
 
-// folder tree
+// =========================
+// Tag data helpers (storage + sync with ALL_BOOKMARKS)
+// =========================
+
+function saveTagData() {
+  chrome.storage.sync.set({ TAG_DATA });
+}
+
+function getTagsForBookmark(id) {
+  const tags = TAG_DATA.tagsByBookmarkId[id];
+  return Array.isArray(tags) ? tags : [];
+}
+
+function setTagsForBookmark(id, tags) {
+  const cleanTags = Array.from(
+    new Set(
+      (tags || [])
+        .map(t => String(t).trim())
+        .filter(t => t.length > 0)
+    )
+  );
+
+  TAG_DATA.tagsByBookmarkId[id] = cleanTags;
+
+  ALL_BOOKMARKS = ALL_BOOKMARKS.map(b =>
+    b.id === id
+      ? { ...b, tags: cleanTags }
+      : b
+  );
+
+  const tagSet = new Set();
+  Object.values(TAG_DATA.tagsByBookmarkId).forEach(arr => {
+    (arr || []).forEach(t => tagSet.add(t));
+  });
+  TAG_DATA.allTags = Array.from(tagSet);
+
+  saveTagData();
+}
+
+// Small popup for editing tags
+function openTagEditor(bookmarkId, parentLi) {
+  // Remove old editor if exists
+  const old = parentLi.querySelector(".tagEditor");
+  if (old) old.remove();
+
+  const editor = document.createElement("div");
+  editor.className = "tagEditor";
+
+  const currentTags = getTagsForBookmark(bookmarkId);
+
+  // Input for new tag
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Add tag...";
+  input.className = "tagEditorInput";
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const newTag = input.value.trim();
+      if (newTag.length > 0) {
+        const updated = [...currentTags, newTag];
+        setTagsForBookmark(bookmarkId, updated);
+        renderList(ALL_BOOKMARKS);
+      }
+    }
+  });
+
+  editor.appendChild(input);
+
+  // Existing tags list
+  const list = document.createElement("div");
+  list.className = "tagEditorList";
+
+  currentTags.forEach(t => {
+    const chip = document.createElement("span");
+    chip.className = "tagChip";
+    chip.textContent = t;
+
+    const x = document.createElement("span");
+    x.className = "tagChipRemove";
+    x.textContent = "×";
+    x.addEventListener("click", () => {
+      const updated = currentTags.filter(ct => ct !== t);
+      setTagsForBookmark(bookmarkId, updated);
+      renderList(ALL_BOOKMARKS);
+    });
+
+    chip.appendChild(x);
+    list.appendChild(chip);
+  });
+
+  editor.appendChild(list);
+  parentLi.appendChild(editor);
+
+  input.focus();
+}
+
+// Folder tree building
+
 function buildFolderTree(items) {
   const root = {
     name: "root",
@@ -165,38 +320,29 @@ function buildFolderTree(items) {
   items.forEach(item => {
     const parts = item.path ? item.path.split(" / ").filter(Boolean) : [];
     let node = root;
-    let currentPath = "";
+    const stack = [root];
 
     parts.forEach(part => {
-      currentPath = currentPath ? currentPath + " / " + part : part;
       if (!node.folders.has(part)) {
+        const newPath = node.path ? node.path + " / " + part : part;
         node.folders.set(part, {
           name: part,
-          path: currentPath,
+          path: newPath,
           folders: new Map(),
           bookmarks: [],
           totalCount: 0
         });
       }
       node = node.folders.get(part);
+      stack.push(node);
     });
 
     node.bookmarks.push(item);
 
-    let bubble = node;
-    while (bubble) {
-      bubble.totalCount += 1;
-      const parentPath = bubble.path.includes(" / ")
-        ? bubble.path.slice(0, bubble.path.lastIndexOf(" / "))
-        : "";
-      if (!parentPath) {
-        if (bubble !== root && bubble !== node) root.totalCount += 1;
-        break;
-      }
-      bubble = findFolderByPath(root, parentPath);
-      if (!bubble) break;
-    }
-    root.totalCount += 1;
+    // increase totalCount for this node and all its ancestors including root
+    stack.forEach(n => {
+      n.totalCount += 1;
+    });
   });
 
   return root;
@@ -226,38 +372,48 @@ function pruneSingleItemFolders(node) {
   });
 }
 
-function findFolderByPath(root, path) {
-  if (!path) return root;
-  const parts = path.split(" / ");
-  let node = root;
-  for (const part of parts) {
-    const next = node.folders.get(part);
-    if (!next) return null;
-    node = next;
-  }
-  return node;
-}
+// =========================
+/* Sorting */
+// =========================
 
-// sorting
 function applySort(items) {
+  if (CURRENT_SORT === "none") return items;
+
   const sorted = [...items];
 
-  if (CURRENT_SORT === "title-asc") {
-    sorted.sort((a, b) => a.title.localeCompare(b.title));
-  } else if (CURRENT_SORT === "title-desc") {
-    sorted.sort((a, b) => b.title.localeCompare(a.title));
-  } else if (CURRENT_SORT === "date-desc") {
-    sorted.sort((a, b) => b.dateAdded - a.dateAdded);
-  } else if (CURRENT_SORT === "date-asc") {
-    sorted.sort((a, b) => a.dateAdded - b.dateAdded);
+  switch (CURRENT_SORT) {
+    case "title-asc":
+      sorted.sort((a, b) =>
+        (a.title || "").localeCompare(b.title || "", undefined, { sensitivity: "base" })
+      );
+      break;
+
+    case "title-desc":
+      sorted.sort((a, b) =>
+        (b.title || "").localeCompare(a.title || "", undefined, { sensitivity: "base" })
+      );
+      break;
+
+    case "date-asc":
+      sorted.sort((a, b) => (a.dateAdded || 0) - (b.dateAdded || 0));
+      break;
+
+    case "date-desc":
+      sorted.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0));
+      break;
   }
 
   return sorted;
 }
 
-// main render
+// =========================
+// Main render
+// =========================
+
 function renderList(items) {
   const container = document.getElementById("listContainer");
+  if (!container) return;
+
   container.innerHTML = "";
 
   if (SETTINGS.showCount) {
@@ -267,16 +423,21 @@ function renderList(items) {
     container.appendChild(count);
   }
 
-  let content;
+  const tagFilterBar = document.getElementById("tagFilterBar");
+  if (tagFilterBar) {
+    // clear tag filter bar unless we are in tag view
+    if (VIEW_MODE !== "tags" || IS_SEARCH_MODE || CURRENT_SORT !== "none") {
+      tagFilterBar.innerHTML = "";
+    }
+  }
 
+  let content;
   const isSortedMode = CURRENT_SORT !== "none";
 
   if (IS_SEARCH_MODE || isSortedMode) {
     const base = isSortedMode ? applySort(items) : items;
     content = renderFlatList(base);
   } else if (VIEW_MODE === "tags") {
-
-    // filter items by selected tags
     let filtered = items;
     if (SELECTED_TAGS.size > 0) {
       filtered = items.filter(item => {
@@ -284,8 +445,8 @@ function renderList(items) {
         return tags.some(t => SELECTED_TAGS.has(t));
       });
     }
-
     content = renderTagView(filtered);
+    renderTagFilters(ALL_BOOKMARKS);
   } else {
     const tree = buildFolderTree(items);
     pruneSingleItemFolders(tree);
@@ -293,9 +454,13 @@ function renderList(items) {
   }
 
   container.appendChild(content);
+  updateBreadcrumb();
 }
 
-// flat list render (for search/sort)
+// =========================
+// Flat list render (search/sort)
+// =========================
+
 function renderFlatList(items) {
   const ul = document.createElement("ul");
   items.forEach(item => {
@@ -304,69 +469,86 @@ function renderFlatList(items) {
   return ul;
 }
 
-// tag view render
-function renderTagView(items) {
-  const ul = document.createElement("ul");
-  ul.className = "tagView";
+// =========================
+// Breadcrumb (simple, mode-based)
+// =========================
 
-  const tagMap = new Map();
+function updateBreadcrumb() {
+  const bar = document.getElementById("breadcrumb");
+  if (!bar) return;
+
+  bar.innerHTML = "";
+
+  const span = document.createElement("span");
+  span.className = "crumb current";
+
+  if (IS_SEARCH_MODE) {
+    span.textContent = "Search results";
+  } else if (VIEW_MODE === "tags") {
+    span.textContent = "Tag view";
+  } else {
+    span.textContent = "All bookmarks";
+  }
+
+  bar.appendChild(span);
+}
+
+// =========================
+// Tag view and filters
+// =========================
+
+function renderTagView(items) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "tagView";
+
+  const groups = {};
 
   items.forEach(item => {
     const tags = item.tags && item.tags.length ? item.tags : ["Other"];
-    tags.forEach(tag => {
-      if (SELECTED_TAGS.size > 0 && !SELECTED_TAGS.has(tag)) return;
-
-      if (!tagMap.has(tag)) {
-        tagMap.set(tag, []);
-      }
-      tagMap.get(tag).push(item);
+    tags.forEach(t => {
+      if (!groups[t]) groups[t] = [];
+      groups[t].push(item);
     });
   });
 
-  const sortedTags = Array.from(tagMap.keys()).sort((a, b) =>
-    a.localeCompare(b)
-  );
+  const sortedTags = Object.keys(groups).sort((a, b) => a.localeCompare(b));
 
-  sortedTags.forEach(tag => {
-    const tagLi = document.createElement("li");
-    tagLi.className = "tagGroup";
+  let tagsToRender = sortedTags;
+  if (SELECTED_TAGS.size > 0) {
+    tagsToRender = sortedTags.filter(t => SELECTED_TAGS.has(t));
+  }
+
+  tagsToRender.forEach(tag => {
+    const section = document.createElement("div");
+    section.className = "tagGroup";
 
     const header = document.createElement("div");
     header.className = "tagHeader";
-    header.textContent = `${tag} (${tagMap.get(tag).length})`;
-    tagLi.appendChild(header);
+    header.textContent = `${tag} (${groups[tag].length})`;
 
     const list = document.createElement("ul");
-    tagMap.get(tag).forEach(item => {
-      list.appendChild(createBookmarkItem(item));
+
+    let itemsInGroup = groups[tag];
+    if (CURRENT_SORT !== "none") {
+      itemsInGroup = applySort(itemsInGroup);
+    }
+
+    itemsInGroup.forEach(item => {
+      const li = createBookmarkItem(item);
+      list.appendChild(li);
     });
 
-    tagLi.appendChild(list);
-    ul.appendChild(tagLi);
+    section.appendChild(header);
+    section.appendChild(list);
+    wrapper.appendChild(section);
   });
 
-  renderTagFilters(items);
-
-  return ul;
+  return wrapper;
 }
 
 function renderTagFilters(items) {
-  // If not in tag mode, clear and exit
-  if (VIEW_MODE !== "tags") {
-    const bar = document.getElementById("tagFilterBar");
-    if (bar) bar.innerHTML = "";
-    return;
-  }
-
-  const controls = document.getElementById("controls");
-  let tagFilterBar = document.getElementById("tagFilterBar");
-
-  if (!tagFilterBar) {
-    tagFilterBar = document.createElement("div");
-    tagFilterBar.id = "tagFilterBar";
-    tagFilterBar.className = "tagFilterBar";
-    controls.appendChild(tagFilterBar);
-  }
+  const tagFilterBar = document.getElementById("tagFilterBar");
+  if (!tagFilterBar) return;
 
   tagFilterBar.innerHTML = "";
 
@@ -401,12 +583,27 @@ function renderTagFilters(items) {
   });
 }
 
-// folder tree render
+// =========================
+// Folder tree render (with pin)
+// =========================
+
 function renderFolderTree(root) {
   const ul = document.createElement("ul");
-  root.folders.forEach(folderNode => {
+
+  const folders = Array.from(root.folders.values());
+  const pinned = folders.filter(f => PINNED_FOLDERS.has(f.path));
+  const normal = folders.filter(f => !PINNED_FOLDERS.has(f.path));
+  const finalList = [...pinned, ...normal];
+
+  finalList.forEach(folderNode => {
     ul.appendChild(renderFolderNode(folderNode));
   });
+
+  // root-level bookmarks
+  root.bookmarks.forEach(b => {
+    ul.appendChild(createBookmarkItem(b));
+  });
+
   return ul;
 }
 
@@ -428,7 +625,6 @@ function renderFolderNode(node) {
   if (SETTINGS.showFolderIcons) {
     const icon = document.createElement("span");
     icon.className = "folderIcon";
-    icon.textContent = "📁";
     header.appendChild(icon);
   }
 
@@ -436,6 +632,23 @@ function renderFolderNode(node) {
   title.className = "folderTitle";
   title.textContent = node.name;
   header.appendChild(title);
+
+  const pinBtn = document.createElement("span");
+  pinBtn.className = "folderPinBtn";
+  pinBtn.textContent = PINNED_FOLDERS.has(node.path) ? "📌" : "📍";
+
+  pinBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    if (PINNED_FOLDERS.has(node.path)) {
+      PINNED_FOLDERS.delete(node.path);
+    } else {
+      PINNED_FOLDERS.add(node.path);
+    }
+    chrome.storage.local.set({ PINNED_FOLDERS: Array.from(PINNED_FOLDERS) });
+    renderList(ALL_BOOKMARKS);
+  });
+
+  header.appendChild(pinBtn);
 
   if (SETTINGS.showCount) {
     const count = document.createElement("span");
@@ -449,7 +662,12 @@ function renderFolderNode(node) {
   const childrenUl = document.createElement("ul");
   childrenUl.className = "folderChildren";
 
-  node.folders.forEach(childFolder => {
+  const folders = Array.from(node.folders.values());
+  const pinned = folders.filter(f => PINNED_FOLDERS.has(f.path));
+  const normal = folders.filter(f => !PINNED_FOLDERS.has(f.path));
+  const finalList = [...pinned, ...normal];
+
+  finalList.forEach(childFolder => {
     childrenUl.appendChild(renderFolderNode(childFolder));
   });
 
@@ -474,7 +692,10 @@ function renderFolderNode(node) {
   return li;
 }
 
-// favicon
+// =========================
+// Bookmark item rendering
+// =========================
+
 function getFaviconUrl(url) {
   try {
     const u = new URL(url);
@@ -484,7 +705,6 @@ function getFaviconUrl(url) {
   }
 }
 
-// bookmark item
 function createBookmarkItem(item) {
   const li = document.createElement("li");
   li.className = "bookmark";
@@ -508,7 +728,16 @@ function createBookmarkItem(item) {
   a.textContent = item.title;
   a.target = "_blank";
   row.appendChild(a);
-
+// Tag edit button
+const tagBtn = document.createElement("span");
+tagBtn.className = "tagEditBtn";
+tagBtn.textContent = "#";
+tagBtn.title = "Edit tags";
+tagBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  openTagEditor(item.id, li);
+});
+row.appendChild(tagBtn);
   li.appendChild(row);
 
   if (SETTINGS.showDateAdded) {
@@ -523,20 +752,29 @@ function createBookmarkItem(item) {
   return li;
 }
 
-// search
+// =========================
+// Search and highlight
+// =========================
+
 function wireSearch() {
   const input = document.getElementById("searchInput");
+  if (!input) return;
 
   input.addEventListener("input", () => {
     const q = input.value.trim().toLowerCase();
-
     IS_SEARCH_MODE = q.length > 0;
 
     const filtered = q
-      ? ALL_BOOKMARKS.filter(b =>
-          b.title.toLowerCase().includes(q) ||
-          b.url.toLowerCase().includes(q)
-        )
+      ? ALL_BOOKMARKS.filter(b => {
+          const title = (b.title || "").toLowerCase();
+          const url = (b.url || "").toLowerCase();
+          const tags = (b.tags || []).join(" ").toLowerCase();
+          return (
+            title.includes(q) ||
+            url.includes(q) ||
+            tags.includes(q)
+          );
+        })
       : ALL_BOOKMARKS;
 
     renderList(filtered);
@@ -546,9 +784,11 @@ function wireSearch() {
 
 function highlight(q) {
   if (!q) return;
-  document.querySelectorAll("li.bookmark a").forEach(a => {
+  const links = document.querySelectorAll("li.bookmark a");
+  const re = new RegExp(`(${escapeReg(q)})`, "gi");
+
+  links.forEach(a => {
     const txt = a.textContent;
-    const re = new RegExp(`(${escapeReg(q)})`, "gi");
     a.innerHTML = txt.replace(re, "<mark>$1</mark>");
   });
 }
@@ -557,158 +797,81 @@ function escapeReg(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// sort dropdown
-function wireSort() {
-  const select = document.getElementById("sortSelect");
+// =========================
+// Controls: view mode, sort, dedup
+// =========================
 
-  select.addEventListener("change", () => {
-    CURRENT_SORT = select.value;
-    renderList(ALL_BOOKMARKS);
-  });
-}
+function wireControls() {
+  const btnFolders = document.getElementById("viewFoldersBtn");
+  const btnTags = document.getElementById("viewTagsBtn");
+  const sortSelect = document.getElementById("sortSelect");
+  const dedupBtn = document.getElementById("dedupBtn");
 
-// dedup
-function wireDedup() {
-  const btn = document.getElementById("dedupBtn");
-
-  btn.addEventListener("click", () => {
-    const seen = new Set();
-    const unique = [];
-    let removed = 0;
-
-    ALL_BOOKMARKS.forEach(b => {
-      const key = b.url;
-      if (seen.has(key)) {
-        removed++;
+  if (btnFolders && btnTags) {
+    const syncViewButtons = () => {
+      if (VIEW_MODE === "folders") {
+        btnFolders.classList.add("active");
+        btnTags.classList.remove("active");
       } else {
-        seen.add(key);
-        unique.push(b);
+        btnTags.classList.add("active");
+        btnFolders.classList.remove("active");
       }
+    };
+
+    btnFolders.addEventListener("click", () => {
+      VIEW_MODE = "folders";
+      SELECTED_TAGS.clear();
+      IS_SEARCH_MODE = false;
+      const input = document.getElementById("searchInput");
+      if (input) input.value = "";
+      syncViewButtons();
+      renderList(ALL_BOOKMARKS);
     });
 
-    ALL_BOOKMARKS = unique;
-    renderList(ALL_BOOKMARKS);
-
-    alert(removed === 0 ? "No duplicates found." : `Removed ${removed} duplicates.`);
-  });
-}
-
-// keyboard shortcuts
-function wireShortcuts() {
-  if (!SETTINGS.enableShortcuts) return;
-
-  document.addEventListener("keydown", e => {
-    if (e.ctrlKey && e.key === "f") {
-      document.getElementById("searchInput").focus();
-      e.preventDefault();
-    }
-
-    if (e.ctrlKey && e.key === "d") {
-      const btn = document.getElementById("dedupBtn");
-      if (btn.style.display !== "none") btn.click();
-      e.preventDefault();
-    }
-  });
-}
-
-// view mode toggle
-function wireViewMode() {
-  const controls = document.getElementById("controls");
-
-  // clear old content
-  controls.innerHTML = "";
-
-  // create left + right containers
-  const left = document.createElement("div");
-  left.id = "controlsLeft";
-
-  const right = document.createElement("div");
-  right.id = "controlsRight";
-
-  // ----- VIEW TOGGLE (Folders / Tags) -----
-  const toggle = document.createElement("div");
-  toggle.className = "viewToggle";
-
-  const btnFolders = document.createElement("button");
-  btnFolders.textContent = "Folders";
-  const btnTags = document.createElement("button");
-  btnTags.textContent = "Tags";
-
-  const sync = () => {
-    if (VIEW_MODE === "folders") {
-      const tagBar = document.getElementById("tagFilterBar");
-if (tagBar) tagBar.innerHTML = "";
-      btnFolders.classList.add("active");
-      btnTags.classList.remove("active");
-    } else {
-      btnTags.classList.add("active");
-      btnFolders.classList.remove("active");
-    }
-  };
-
-  btnFolders.addEventListener("click", () => {
-    VIEW_MODE = "folders";
-    SELECTED_TAGS.clear();
-    sync();
-    renderList(ALL_BOOKMARKS);
-  });
-
-  btnTags.addEventListener("click", () => {
-    VIEW_MODE = "tags";
-    sync();
-    renderList(ALL_BOOKMARKS);
-  });
-
-  toggle.appendChild(btnFolders);
-  toggle.appendChild(btnTags);
-  sync();
-
-  left.appendChild(toggle);
-
-  // ----- SORT SELECT -----
-  const sortSelect = document.createElement("select");
-  sortSelect.id = "sortSelect";
-  sortSelect.innerHTML = `
-    <option value="none">No sorting</option>
-    <option value="title-asc">Title A–Z</option>
-    <option value="title-desc">Title Z–A</option>
-    <option value="date-desc">Newest first</option>
-    <option value="date-asc">Oldest first</option>
-  `;
-  sortSelect.addEventListener("change", () => {
-    CURRENT_SORT = sortSelect.value;
-    renderList(ALL_BOOKMARKS);
-  });
-
-  // ----- DEDUP BUTTON -----
-  const dedupBtn = document.createElement("button");
-  dedupBtn.id = "dedupBtn";
-  dedupBtn.textContent = "Remove duplicates";
-  dedupBtn.addEventListener("click", () => {
-    const seen = new Set();
-    const unique = [];
-    let removed = 0;
-
-    ALL_BOOKMARKS.forEach(b => {
-      const key = b.url;
-      if (seen.has(key)) {
-        removed++;
-      } else {
-        seen.add(key);
-        unique.push(b);
-      }
+    btnTags.addEventListener("click", () => {
+      VIEW_MODE = "tags";
+      IS_SEARCH_MODE = false;
+      const input = document.getElementById("searchInput");
+      if (input) input.value = "";
+      syncViewButtons();
+      renderList(ALL_BOOKMARKS);
     });
 
-    ALL_BOOKMARKS = unique;
-    renderList(ALL_BOOKMARKS);
+    syncViewButtons();
+  }
 
-    alert(removed === 0 ? "No duplicates found." : `Removed ${removed} duplicates.`);
-  });
+  if (sortSelect) {
+    sortSelect.value = CURRENT_SORT;
+    sortSelect.style.display = SETTINGS.enableSorting ? "inline-block" : "none";
 
-  right.appendChild(sortSelect);
-  right.appendChild(dedupBtn);
+    sortSelect.addEventListener("change", () => {
+      CURRENT_SORT = sortSelect.value;
+      renderList(ALL_BOOKMARKS);
+    });
+  }
 
-  // attach both sides
-  controls.appendChild(left);
-  controls.appendChild(right);
+  if (dedupBtn) {
+    dedupBtn.style.display = SETTINGS.enableDedup ? "inline-block" : "none";
+
+    dedupBtn.addEventListener("click", () => {
+      const seen = new Set();
+      const unique = [];
+      let removed = 0;
+
+      ALL_BOOKMARKS.forEach(b => {
+        const key = b.url;
+        if (seen.has(key)) {
+          removed++;
+        } else {
+          seen.add(key);
+          unique.push(b);
+        }
+      });
+
+      ALL_BOOKMARKS = unique;
+      renderList(ALL_BOOKMARKS);
+
+      alert(removed === 0 ? "No duplicates found." : `Removed ${removed} duplicates.`);
+    });
+  }
 }
