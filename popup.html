@@ -9,43 +9,40 @@
 <body>
   <h2>My Bookmarks</h2>
 
-  <!-- Search box -->
-  <input
-    id="searchInput"
-    type="text"
-    placeholder="Search bookmarks..."
-    autocomplete="off"
-  />
+  <input id="searchInput" type="text" placeholder="Search bookmarks..." autocomplete="off" />
 
-  <!-- Controls -->
   <div id="controls">
-
     <div id="breadcrumb"></div>
+
     <div class="controlsTop">
-      <!-- View toggle -->
+
       <div class="viewToggle">
         <button id="viewFoldersBtn">Folders</button>
         <button id="viewTagsBtn">Tags</button>
       </div>
 
-      <!-- Sort -->
-      <select id="sortSelect">
-        <option value="none" selected>No sorting</option>
-        <option value="title-asc">Title A → Z</option>
-        <option value="title-desc">Title Z → A</option>
-        <option value="date-desc">Newest first</option>
-        <option value="date-asc">Oldest first</option>
-      </select>
+      <div id="sortDropdown" class="sortDropdown">
+        <button id="sortDropdownToggle" class="sortToggleBtn">
+          <span id="sortDropdownLabel">Sort</span>
+          <span class="caret">▾</span>
+        </button>
 
-      <!-- Dedup -->
+        <div id="sortDropdownMenu" class="sortMenu">
+          <button class="sortOption" data-value="none">No sorting</button>
+          <button class="sortOption" data-value="title-asc">Title A → Z</button>
+          <button class="sortOption" data-value="title-desc">Title Z → A</button>
+          <button class="sortOption" data-value="date-desc">Newest first</button>
+          <button class="sortOption" data-value="date-asc">Oldest first</button>
+          <button class="sortOption" data-value="visits-desc">Most visited</button>
+        </div>
+      </div>
+
       <button id="dedupBtn">Remove duplicates</button>
     </div>
 
-    <!-- Tag filter bar (auto-filled by JS) -->
     <div class="tagFilterBar" id="tagFilterBar"></div>
   </div>
 
-  <!-- Container for bookmarks -->
   <div id="listContainer">Loading...</div>
 
   <script src="popup.js"></script>

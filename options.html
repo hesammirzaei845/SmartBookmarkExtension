@@ -9,50 +9,51 @@
 <body>
   <h1>Settings</h1>
 
-  <!-- Features -->
-  <section>
-    <h2>Features</h2>
+<section>
+  <h2>Features</h2>
 
-    <label><input type="checkbox" id="enableDedup"> Enable duplicate removal</label>
-    <label><input type="checkbox" id="enableSorting"> Enable sorting options</label>
-    <label><input type="checkbox" id="showFavicons"> Show favicons</label>
-    <label><input type="checkbox" id="showFolderIcons"> Show folder icons</label>
-    <label><input type="checkbox" id="showDateAdded"> Show date added</label>
-    <label><input type="checkbox" id="showCount"> Show bookmark count</label>
-    <label><input type="checkbox" id="compactMode"> Compact layout</label>
-    <label><input type="checkbox" id="enableShortcuts"> Enable keyboard shortcuts</label>
-  </section>
+  <label><input type="checkbox" id="enableDedup"> Enable duplicate removal</label>
+  <label><input type="checkbox" id="enableSorting"> Enable sorting options</label>
+  <label><input type="checkbox" id="showFavicons"> Show favicons</label>
+  <label><input type="checkbox" id="showFolderIcons"> Show folder icons</label>
+  <label><input type="checkbox" id="showDateAdded"> Show date added</label>
+  <label><input type="checkbox" id="showCount"> Show bookmark count</label>
+  <label><input type="checkbox" id="compactMode"> Compact layout</label>
+  <label><input type="checkbox" id="enableShortcuts"> Enable keyboard shortcuts</label>
+  <label><input type="checkbox" id="enableManualTags"> Enable manual tags</label>
 
-  <!-- Appearance -->
-  <section>
-    <h2>Appearance</h2>
+  <!-- 🔥 تیک جدید -->
+  <label><input type="checkbox" id="showVisitCount"> Show visit count under bookmarks</label>
+</section>
 
-    <label>
-      Font size:
-      <select id="fontSize">
-        <option value="small">Small</option>
-        <option value="medium">Medium</option>
-        <option value="large">Large</option>
-      </select>
-    </label>
+<section>
+  <h2>Appearance</h2>
 
-    <label>
-      Theme:
-      <select id="theme">
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
-  </section>
+  <label>
+    Font size:
+    <select id="fontSize">
+      <option value="small">Small</option>
+      <option value="medium">Medium</option>
+      <option value="large">Large</option>
+    </select>
+  </label>
 
-  <!-- Backup -->
-  <section>
-    <h2>Backup & Restore</h2>
-    <button id="exportBtn">Export JSON</button>
-    <input type="file" id="importFile" accept="application/json">
-    <button id="importBtn">Import JSON</button>
-  </section>
+  <label>
+    Theme:
+    <select id="theme">
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+  </label>
+</section>
 
-  <script src="options.js"></script>
+<section>
+  <h2>Backup & Restore</h2>
+  <button id="exportBtn">Export JSON</button>
+  <input type="file" id="importFile" accept="application/json">
+  <button id="importBtn">Import JSON</button>
+</section>
+
+<script src="options.js"></script>
 </body>
 </html>

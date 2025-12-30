@@ -1,3 +1,7 @@
+// =========================
+// SETTINGS & GLOBAL STATE
+// =========================
+
 let SETTINGS = {
   enableDedup: true,
   enableSorting: true,
@@ -7,23 +11,437 @@ let SETTINGS = {
   showCount: true,
   compactMode: false,
   fontSize: "medium", // "small" | "medium" | "large"
-  theme: "light"      // "light" | "dark"
+  theme: "light",     // "light" | "dark"
+  enableManualTags: true // allow manual tags on/off
 };
 
 let ALL_BOOKMARKS = [];
-let CURRENT_SORT = "none";       
+let CURRENT_SORT = "none";
 let IS_SEARCH_MODE = false;
 let VIEW_MODE = "folders";       // "folders" | "tags"
 let SELECTED_TAGS = new Set();   // active tag filters
-let FOLDER_STATE = {};           // { "Folder / Sub": true/false } expanded (true) / collapsed (false)
+let FOLDER_STATE = {};           // { "Folder / Sub": true/false }
 let PINNED_FOLDERS = new Set();  // Set of folder.path strings
-let CURRENT_FOLDER_PATH = ""; // مسیر فولدر فعال
+let CURRENT_FOLDER_PATH = "";
+
+// Manual tag data (manual tags only)
 let TAG_DATA = {
   tagsByBookmarkId: {}, // { [bookmarkId]: string[] }
   allTags: []           // string[]
 };
 
-// Initialization
+// =========================
+// AUTO-TAGGING ML ENGINE
+// =========================
+
+const PREDEFINED_TAG_KEYWORDS = {
+  programming: [
+    "stack overflow",
+    "stackoverflow",
+    "github",
+    "gitlab",
+    "codepen",
+    "jsfiddle",
+    "w3schools",
+    "mdn",
+    "visual studio",
+    "vscode",
+    "c#",
+    "dotnet",
+    "java",
+    "python",
+    "cpp",
+    "c++",
+    "golang",
+    "go lang",
+    "rust",
+    "typescript",
+    "programming",
+    "developer",
+    "coding",
+    "api",
+    "docker",
+    "kubernetes"
+  ],
+  ai_tools: [
+    "copilot",
+    "chatgpt",
+    "openai",
+    "bard",
+    "claude",
+    "midjourney",
+    "perplexity",
+    "ai",
+    "machine learning",
+    "deep learning"
+  ],
+  email: [
+    "gmail",
+    "outlook",
+    "yahoo mail",
+    "protonmail",
+    "inbox",
+    "mail",
+    "webmail"
+  ],
+  gaming: [
+    "steam",
+    "epic games",
+    "epicgames",
+    "rockstar games",
+    "rockstargames",
+    "wb games",
+    "wbgames",
+    "playstation",
+    "xbox",
+    "nintendo",
+    "game",
+    "gaming",
+    "gog.com",
+    "cd projekt",
+    "cdprojekt",
+    "ubisoft",
+    "riot games",
+    "league of legends",
+    "valorant"
+  ],
+  shopping: [
+    "digikala",
+    "دیجی کالا",
+    "amazon",
+    "ebay",
+    "sheypoor",
+    "شیپور",
+    "divar",
+    "دیوار",
+    "shopping",
+    "store",
+    "shop",
+    "market",
+    "online shop",
+    "cart",
+    "checkout",
+    "product",
+    "offer",
+    "deal"
+  ],
+  social: [
+    "twitter",
+    "x.com",
+    "instagram",
+    "facebook",
+    "reddit",
+    "linkedin",
+    "discord",
+    "telegram",
+    "whatsapp",
+    "social"
+  ],
+  video: [
+    "youtube",
+    "youtu.be",
+    "twitch",
+    "netflix",
+    "hulu",
+    "prime video",
+    "movie",
+    "series",
+    "stream",
+    "streaming",
+    "aparat",
+    "نماشا",
+    "film"
+  ],
+  news: [
+    "news",
+    "bbc",
+    "cnn",
+    "reuters",
+    "guardian",
+    "nytimes",
+    "nyt",
+    "economist"
+  ],
+  education: [
+    "university",
+    "course",
+    "tutorial",
+    "udemy",
+    "coursera",
+    "edx",
+    "khan academy",
+    "learn",
+    "lecture",
+    "assignment",
+    "exam"
+  ],
+  docs: [
+    "drive.google.com",
+    "docs.google.com",
+    "notion",
+    "confluence",
+    "onenote",
+    "evernote",
+    "document",
+    "spreadsheet",
+    "slides"
+  ],
+  tools: [
+    "soft98",
+    "download",
+    "tool",
+    "utility",
+    "app",
+    "software"
+  ]
+};
+
+const TAG_LEARNING_STORAGE_KEY = "tagLearningModel";
+let TAG_LEARNING_MODEL = {};
+
+
+// ML helpers
+
+// Corpus stats for TF-IDF
+
+const TAG_MODEL_VERSION = 1;
+
+function ensureModelMeta() {
+  TAG_LEARNING_MODEL.__meta = TAG_LEARNING_MODEL.__meta || {
+    version: TAG_MODEL_VERSION,
+    docCount: 0,
+    tokenDocFreq: {}
+  };
+}
+
+function incrementCorpus(bookmarkItem, uniqueTokens) {
+  ensureModelMeta();
+  TAG_LEARNING_MODEL.__meta.docCount += 1;
+  uniqueTokens.forEach(tok => {
+    TAG_LEARNING_MODEL.__meta.tokenDocFreq[tok] =
+      (TAG_LEARNING_MODEL.__meta.tokenDocFreq[tok] || 0) + 1;
+  });
+}
+
+function computeIdf(token) {
+  ensureModelMeta();
+  const docCount = TAG_LEARNING_MODEL.__meta.docCount || 1;
+  const df = TAG_LEARNING_MODEL.__meta.tokenDocFreq[token] || 0;
+  return Math.log((docCount + 1) / (df + 1)) + 1;
+}
+
+
+function tokenizeText(text) {
+  if (!text) return [];
+  return text
+    .toLowerCase()
+    .replace(/https?:\/\//g, "")
+    .replace(/[^\p{L}\p{N}\s./_-]+/gu, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 1);
+}
+
+function loadTagLearningModel() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(TAG_LEARNING_STORAGE_KEY, (data) => {
+      TAG_LEARNING_MODEL = data[TAG_LEARNING_STORAGE_KEY] || {};
+      resolve(TAG_LEARNING_MODEL);
+    });
+  });
+}
+
+function saveTagLearningModel() {
+  ensureModelMeta();                       
+  TAG_LEARNING_MODEL.__meta.lastUpdated = Date.now(); 
+  const obj = {};
+  obj[TAG_LEARNING_STORAGE_KEY] = TAG_LEARNING_MODEL;
+  chrome.storage.local.set(obj);
+}
+
+
+function recordManualTagsForLearning(bookmarkItem, manualTags) {
+  if (!manualTags || !manualTags.length || !bookmarkItem) return;
+
+  const textParts = [
+    bookmarkItem.title || "",
+    bookmarkItem.url || ""
+  ];
+  const tokens = tokenizeText(textParts.join(" "));
+  const uniqueTokens = Array.from(new Set(tokens));
+
+  manualTags.forEach((tag) => {
+    const tagKey = tag.toLowerCase();
+    uniqueTokens.forEach((token) => {
+      if (!TAG_LEARNING_MODEL[token]) TAG_LEARNING_MODEL[token] = {};
+      if (!TAG_LEARNING_MODEL[token][tagKey]) TAG_LEARNING_MODEL[token][tagKey] = 0;
+      TAG_LEARNING_MODEL[token][tagKey] += 1;
+    });
+  });
+
+  incrementCorpus(bookmarkItem, uniqueTokens);
+  saveTagLearningModel();
+}
+
+
+
+function scoreTagsFromPredefined(textTokens) {
+  const scores = {};
+  const text = textTokens.join(" ");
+
+  Object.entries(PREDEFINED_TAG_KEYWORDS).forEach(([tag, keywords]) => {
+    let score = 0;
+    keywords.forEach((kw) => {
+      const kwLower = kw.toLowerCase();
+      if (text.includes(kwLower)) {
+        score += 2;
+      }
+    });
+
+    textTokens.forEach((token) => {
+      keywords.forEach((kw) => {
+        if (kw.toLowerCase().includes(token) || token.includes(kw.toLowerCase())) {
+          score += 1;
+        }
+      });
+    });
+
+    if (score > 0) {
+      scores[tag] = (scores[tag] || 0) + score;
+    }
+  });
+
+  return scores;
+}
+
+function scoreTagsFromLearning(textTokens) {
+  const scores = {};
+  textTokens.forEach((token) => {
+    const entry = TAG_LEARNING_MODEL[token];
+    if (!entry) return;
+    Object.entries(entry).forEach(([tag, val]) => {
+      scores[tag] = (scores[tag] || 0) + val;
+    });
+  });
+  return scores;
+}
+
+function generateAutoTagsForBookmark(bookmarkItem, maxTags = 3) {
+  const textParts = [bookmarkItem.title || "", bookmarkItem.url || ""];
+  let tokens = tokenizeText(textParts.join(" "));
+  if (!tokens.length) return [];
+
+  const titleTokens = tokenizeText(bookmarkItem.title || "");
+  let hostTokens = [];
+  let pathTokens = [];
+  try {
+    const u = new URL(bookmarkItem.url || "");
+    hostTokens = tokenizeText(u.hostname || "");
+    pathTokens = tokenizeText((u.pathname || "") + " " + (u.search || ""));
+  } catch (_) {}
+
+  const tf = {};
+  tokens.forEach(t => tf[t] = (tf[t] || 0) + 1);
+
+  const sectionWeight = (t) => {
+    if (titleTokens.includes(t)) return 1.0;
+    if (hostTokens.includes(t))  return 0.7;
+    if (pathTokens.includes(t))  return 0.5;
+    return 0.6;
+  };
+
+  const tagScoresNB = {};
+  const tagTotals = {};
+  const vocabSize = Object.keys(TAG_LEARNING_MODEL).length || 1;
+
+  Object.entries(TAG_LEARNING_MODEL).forEach(([tok, tagMap]) => {
+    if (tok === "__meta") return;
+    Object.entries(tagMap).forEach(([tag, cnt]) => {
+      tagTotals[tag] = (tagTotals[tag] || 0) + cnt;
+    });
+  });
+
+  const tagsSeen = Object.keys(tagTotals);
+  const hasLearned = tagsSeen.length > 0;
+
+  if (hasLearned) {
+    const totalCountsAll = Object.values(tagTotals).reduce((a, b) => a + b, 0) || 1;
+
+    tagsSeen.forEach(tag => {
+      const prior = (tagTotals[tag] + 1) / (totalCountsAll + tagsSeen.length);
+      let logScore = Math.log(prior);
+
+      Object.keys(tf).forEach(tok => {
+        const countTokTag = (TAG_LEARNING_MODEL[tok] && TAG_LEARNING_MODEL[tok][tag]) ? TAG_LEARNING_MODEL[tok][tag] : 0;
+        const tokIdf = computeIdf(tok);
+        const tokTf = tf[tok];
+        const w = sectionWeight(tok);
+
+        const likelihood = (countTokTag + 1) / (tagTotals[tag] + vocabSize);
+        logScore += Math.log(likelihood) * (tokTf * tokIdf * w);
+      });
+
+      tagScoresNB[tag] = logScore;
+    });
+  }
+
+  const tokensAll = Array.from(new Set(tokens));
+  const predefinedScores = scoreTagsFromPredefined(tokensAll);
+
+  const combined = {};
+
+  Object.entries(predefinedScores).forEach(([tag, score]) => {
+    combined[tag] = (combined[tag] || 0) + score;
+  });
+
+  if (hasLearned) {
+    const nbValues = Object.values(tagScoresNB);
+    const maxLog = nbValues.length ? Math.max(...nbValues) : 0;
+    Object.entries(tagScoresNB).forEach(([tag, logScore]) => {
+      const rel = Math.exp(logScore - maxLog);
+      combined[tag] = (combined[tag] || 0) + rel * 2;
+    });
+  }
+
+  const sorted = Object.entries(combined).sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, maxTags);
+
+  const CONF_THRESHOLD = hasLearned ? 0.2 : 2;
+  const confident = top.filter(([, s]) => s >= CONF_THRESHOLD).map(([tag]) => tag);
+
+  return confident;
+}
+
+function rejectAutoTag(bookmarkItem, tag) {
+  const tokens = tokenizeText((bookmarkItem.title || "") + " " + (bookmarkItem.url || ""));
+  tokens.forEach(tok => {
+    if (TAG_LEARNING_MODEL[tok] && TAG_LEARNING_MODEL[tok][tag]) {
+      TAG_LEARNING_MODEL[tok][tag] -= 1;
+      if (TAG_LEARNING_MODEL[tok][tag] <= 0) {
+        delete TAG_LEARNING_MODEL[tok][tag];
+      }
+    }
+  });
+  saveTagLearningModel();
+}
+
+
+function getAllTagsForBookmark(item) {
+  const manualEnabled = SETTINGS.enableManualTags !== false;
+  const manualTags =
+    manualEnabled && Array.isArray(item.manualTags) ? item.manualTags : [];
+
+  const autoTags = generateAutoTagsForBookmark(item);
+  const all = [...manualTags, ...autoTags];
+
+  if (!all.length) return ["other"];
+
+  const unique = Array.from(new Set(all.map((t) => String(t).toLowerCase())));
+  return unique;
+}
+
+// =========================
+// INITIALIZATION
+// =========================
 
 chrome.bookmarks.getTree(tree => {
   ALL_BOOKMARKS = flatten(tree[0].children);
@@ -32,53 +450,56 @@ chrome.bookmarks.getTree(tree => {
     SETTINGS = { ...SETTINGS, ...data };
     applySettings();
 
-    chrome.storage.sync.get(["TAG_DATA"], dataTags => {
-      const stored = dataTags.TAG_DATA;
-      const storedTagsById =
-        stored && stored.tagsByBookmarkId && typeof stored.tagsByBookmarkId === "object"
-          ? stored.tagsByBookmarkId
-          : {};
+    loadTagLearningModel().then(() => {
+      chrome.storage.sync.get(["TAG_DATA"], dataTags => {
+        const stored = dataTags.TAG_DATA;
+        const storedTagsById =
+          stored && stored.tagsByBookmarkId && typeof stored.tagsByBookmarkId === "object"
+            ? stored.tagsByBookmarkId
+            : {};
 
-      const initialAllTags =
-        stored && Array.isArray(stored.allTags)
-          ? new Set(stored.allTags)
-          : new Set();
+        const initialAllTags =
+          stored && Array.isArray(stored.allTags)
+            ? new Set(stored.allTags)
+            : new Set();
 
-      ALL_BOOKMARKS = ALL_BOOKMARKS.map(b => {
-        let tags = storedTagsById[b.id];
+        ALL_BOOKMARKS = ALL_BOOKMARKS.map(b => {
+          let manualTags = storedTagsById[b.id];
+          if (!Array.isArray(manualTags)) {
+            manualTags = [];
+          }
 
-        if (!Array.isArray(tags) || tags.length === 0) {
-          tags = autoDetectTags(b);
-        }
+          manualTags.forEach(t => initialAllTags.add(t));
 
-        tags.forEach(t => initialAllTags.add(t));
+          return {
+            ...b,
+            manualTags
+          };
+        });
 
-        return {
-          ...b,
-          tags
+        TAG_DATA = {
+          tagsByBookmarkId: Object.fromEntries(
+            ALL_BOOKMARKS.map(b => [b.id, b.manualTags])
+          ),
+          allTags: Array.from(initialAllTags)
         };
-      });
 
-      TAG_DATA = {
-        tagsByBookmarkId: Object.fromEntries(
-          ALL_BOOKMARKS.map(b => [b.id, b.tags])
-        ),
-        allTags: Array.from(initialAllTags)
-      };
+        chrome.storage.local.get(["PINNED_FOLDERS"], data2 => {
+          if (Array.isArray(data2.PINNED_FOLDERS)) {
+            PINNED_FOLDERS = new Set(data2.PINNED_FOLDERS);
+          }
 
-      chrome.storage.local.get(["PINNED_FOLDERS"], data2 => {
-        if (Array.isArray(data2.PINNED_FOLDERS)) {
-          PINNED_FOLDERS = new Set(data2.PINNED_FOLDERS);
-        }
+          wireControls();
+          wireSearch();
 
-        wireControls();
-        wireSearch();
-        renderList(ALL_BOOKMARKS);
+          loadVisitCounts().then(() => {
+            renderList(ALL_BOOKMARKS);
+          });
+        });
       });
     });
   });
 });
-
 
 // =========================
 // Helpers: flatten bookmarks
@@ -120,11 +541,17 @@ function applySettings() {
 
   // compact mode
   body.classList.toggle("compact", SETTINGS.compactMode);
+  body.classList.toggle("hideVisits", SETTINGS.showVisitCount === false);
 
-  // controls visibility (sorting/dedup)
+  // controls visibility
   const sortSelect = document.getElementById("sortSelect");
   if (sortSelect) {
     sortSelect.style.display = SETTINGS.enableSorting ? "inline-block" : "none";
+  }
+
+  const sortDropdown = document.getElementById("sortDropdown");
+  if (sortDropdown) {
+    sortDropdown.style.display = SETTINGS.enableSorting ? "inline-block" : "none";
   }
 
   const dedupBtn = document.getElementById("dedupBtn");
@@ -134,90 +561,14 @@ function applySettings() {
 }
 
 // =========================
-// Tag rules and auto-tagging
-// =========================
-
-const TAG_RULES = {
-  Email: {
-    hostname: ["mail", "gmail", "outlook", "yahoo"],
-    path: ["inbox", "mail"],
-    title: ["inbox", "email"]
-  },
-  Video: {
-    hostname: ["video", "media", "tv", "film", "aparat", "namasha", "youtube", "vimeo"],
-    path: ["watch", "video", "v/"],
-    title: ["video", "watch", "تماشا", "فیلم"]
-  },
-  Gaming: {
-    hostname: ["steam", "epic", "rockstar", "cdprojekt", "game"],
-    path: ["game", "play"],
-    title: ["game", "gaming"]
-  },
-  Wallpapers: {
-    hostname: ["wallpaper", "unsplash", "wallhaven"],
-    path: ["wallpaper", "image", "photo"],
-    title: ["wallpaper", "background"]
-  },
-  Software: {
-    hostname: ["soft98", "filehippo"],
-    path: ["download"],
-    title: ["download", "software"]
-  },
-  Shopping: {
-    hostname: ["shop", "store", "market", "buy", "sheypoor", "divar", "digikala"],
-    path: ["shop", "store"],
-    title: ["buy", "shopping"]
-  },
-  AI: {
-    hostname: ["openai", "chatgpt", "bard"],
-    path: ["chat"],
-    title: ["ai", "chatgpt"]
-  },
-  Programming: {
-    hostname: ["github", "stackoverflow", "gitlab"],
-    path: ["code"],
-    title: ["code", "programming"]
-  }
-};
-
-function autoDetectTags(bookmark) {
-  const tags = new Set();
-
-  try {
-    const url = new URL(bookmark.url);
-    const hostname = url.hostname.toLowerCase();
-    const path = url.pathname.toLowerCase();
-    const title = (bookmark.title || "").toLowerCase();
-
-    for (const [tag, rules] of Object.entries(TAG_RULES)) {
-      let matched = false;
-
-      if (rules.hostname && rules.hostname.some(key => hostname.includes(key))) matched = true;
-      else if (rules.path && rules.path.some(key => path.includes(key))) matched = true;
-      else if (rules.title && rules.title.some(key => title.includes(key))) matched = true;
-
-      if (matched) tags.add(tag);
-    }
-  } catch (e) {
-    // ignore invalid URLs
-  }
-
-  if (tags.size === 0) {
-    tags.add("Other");
-  }
-
-  return Array.from(tags);
-}
-
-// =========================
-// Tag data helpers (storage + sync with ALL_BOOKMARKS)
+// Manual tag data helpers
 // =========================
 
 function saveTagData() {
   chrome.storage.sync.set({ TAG_DATA });
 }
 
-function getTagsForBookmark(id) {
+function getManualTagsForBookmark(id) {
   const tags = TAG_DATA.tagsByBookmarkId[id];
   return Array.isArray(tags) ? tags : [];
 }
@@ -235,7 +586,7 @@ function setTagsForBookmark(id, tags) {
 
   ALL_BOOKMARKS = ALL_BOOKMARKS.map(b =>
     b.id === id
-      ? { ...b, tags: cleanTags }
+      ? { ...b, manualTags: cleanTags }
       : b
   );
 
@@ -246,20 +597,26 @@ function setTagsForBookmark(id, tags) {
   TAG_DATA.allTags = Array.from(tagSet);
 
   saveTagData();
+
+  const bookmarkItem = ALL_BOOKMARKS.find(b => b.id === id);
+  if (bookmarkItem) {
+    recordManualTagsForLearning(bookmarkItem, cleanTags);
+  }
 }
 
-// Small popup for editing tags
+// =========================
+// Tag editor
+// =========================
+
 function openTagEditor(bookmarkId, parentLi) {
-  // Remove old editor if exists
+  if (!SETTINGS.enableManualTags) return;
+
   const old = parentLi.querySelector(".tagEditor");
   if (old) old.remove();
 
   const editor = document.createElement("div");
   editor.className = "tagEditor";
 
-  const currentTags = getTagsForBookmark(bookmarkId);
-
-  // Input for new tag
   const input = document.createElement("input");
   input.type = "text";
   input.placeholder = "Add tag...";
@@ -269,7 +626,8 @@ function openTagEditor(bookmarkId, parentLi) {
     if (e.key === "Enter") {
       const newTag = input.value.trim();
       if (newTag.length > 0) {
-        const updated = [...currentTags, newTag];
+        const manualTags = getManualTagsForBookmark(bookmarkId);
+        const updated = [...manualTags, newTag];
         setTagsForBookmark(bookmarkId, updated);
         renderList(ALL_BOOKMARKS);
       }
@@ -278,11 +636,14 @@ function openTagEditor(bookmarkId, parentLi) {
 
   editor.appendChild(input);
 
-  // Existing tags list
   const list = document.createElement("div");
   list.className = "tagEditorList";
 
-  currentTags.forEach(t => {
+  const allTags = getAllTagsForBookmark(ALL_BOOKMARKS.find(b => b.id === bookmarkId));
+  const manualTags = getManualTagsForBookmark(bookmarkId);
+  const bookmarkItem = ALL_BOOKMARKS.find(b => b.id === bookmarkId);
+
+  allTags.forEach(t => {
     const chip = document.createElement("span");
     chip.className = "tagChip";
     chip.textContent = t;
@@ -290,9 +651,16 @@ function openTagEditor(bookmarkId, parentLi) {
     const x = document.createElement("span");
     x.className = "tagChipRemove";
     x.textContent = "×";
+    x.title = manualTags.includes(t) ? "Remove manual tag" : "Reject auto tag";
+
     x.addEventListener("click", () => {
-      const updated = currentTags.filter(ct => ct !== t);
-      setTagsForBookmark(bookmarkId, updated);
+      if (manualTags.includes(t)) {
+        const updated = manualTags.filter(ct => ct !== t);
+        setTagsForBookmark(bookmarkId, updated);
+      } else {
+        rejectAutoTag(bookmarkItem, t);
+      }
+
       renderList(ALL_BOOKMARKS);
     });
 
@@ -306,7 +674,44 @@ function openTagEditor(bookmarkId, parentLi) {
   input.focus();
 }
 
+
+// =========================
+// Visit count helpers
+// =========================
+
+function getVisitCount(url) {
+  return new Promise(resolve => {
+    let hostname = "";
+
+    try {
+      hostname = new URL(url).hostname;
+    } catch (e) {
+      resolve(0);
+      return;
+    }
+
+    chrome.history.search(
+      {
+        text: hostname,
+        startTime: 0,
+        maxResults: 999999
+      },
+      results => {
+        resolve(results.length);
+      }
+    );
+  });
+}
+
+async function loadVisitCounts() {
+  for (const b of ALL_BOOKMARKS) {
+    b.visitCount = await getVisitCount(b.url);
+  }
+}
+
+// =========================
 // Folder tree building
+// =========================
 
 function buildFolderTree(items) {
   const root = {
@@ -339,7 +744,6 @@ function buildFolderTree(items) {
 
     node.bookmarks.push(item);
 
-    // increase totalCount for this node and all its ancestors including root
     stack.forEach(n => {
       n.totalCount += 1;
     });
@@ -373,9 +777,20 @@ function pruneSingleItemFolders(node) {
 }
 
 // =========================
-/* Sorting */
+// Sorting
 // =========================
 
+// labels for UI sync (select + dropdown)
+const SORT_LABELS = {
+  "none": "No sorting",
+  "title-asc": "Title A→Z",
+  "title-desc": "Title Z→A",
+  "date-desc": "Newest",
+  "date-asc": "Oldest",
+  "visits-desc": "Most visited"
+};
+
+// core sort logic on items
 function applySort(items) {
   if (CURRENT_SORT === "none") return items;
 
@@ -387,6 +802,9 @@ function applySort(items) {
         (a.title || "").localeCompare(b.title || "", undefined, { sensitivity: "base" })
       );
       break;
+
+    case "visits-desc":
+      return [...items].sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0));
 
     case "title-desc":
       sorted.sort((a, b) =>
@@ -404,6 +822,23 @@ function applySort(items) {
   }
 
   return sorted;
+}
+
+// set sort mode and refresh UI
+function setSortMode(mode) {
+  CURRENT_SORT = mode;
+
+  const sortSelect = document.getElementById("sortSelect");
+  if (sortSelect) {
+    sortSelect.value = CURRENT_SORT;
+  }
+
+  const sortLabel = document.getElementById("sortDropdownLabel");
+  if (sortLabel) {
+    sortLabel.textContent = SORT_LABELS[CURRENT_SORT] || "Sort";
+  }
+
+  renderList(ALL_BOOKMARKS);
 }
 
 // =========================
@@ -425,7 +860,6 @@ function renderList(items) {
 
   const tagFilterBar = document.getElementById("tagFilterBar");
   if (tagFilterBar) {
-    // clear tag filter bar unless we are in tag view
     if (VIEW_MODE !== "tags" || IS_SEARCH_MODE || CURRENT_SORT !== "none") {
       tagFilterBar.innerHTML = "";
     }
@@ -441,7 +875,7 @@ function renderList(items) {
     let filtered = items;
     if (SELECTED_TAGS.size > 0) {
       filtered = items.filter(item => {
-        const tags = item.tags && item.tags.length ? item.tags : ["Other"];
+        const tags = getAllTagsForBookmark(item);
         return tags.some(t => SELECTED_TAGS.has(t));
       });
     }
@@ -458,7 +892,7 @@ function renderList(items) {
 }
 
 // =========================
-// Flat list render (search/sort)
+// Flat list render
 // =========================
 
 function renderFlatList(items) {
@@ -470,7 +904,7 @@ function renderFlatList(items) {
 }
 
 // =========================
-// Breadcrumb (simple, mode-based)
+// Breadcrumb
 // =========================
 
 function updateBreadcrumb() {
@@ -504,10 +938,11 @@ function renderTagView(items) {
   const groups = {};
 
   items.forEach(item => {
-    const tags = item.tags && item.tags.length ? item.tags : ["Other"];
+    const tags = getAllTagsForBookmark(item);
     tags.forEach(t => {
-      if (!groups[t]) groups[t] = [];
-      groups[t].push(item);
+      const key = String(t);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
     });
   });
 
@@ -554,11 +989,11 @@ function renderTagFilters(items) {
 
   const allTags = new Set();
   items.forEach(item => {
-    const tags = item.tags && item.tags.length ? item.tags : ["Other"];
+    const tags = getAllTagsForBookmark(item);
     tags.forEach(t => allTags.add(t));
   });
 
-  const sorted = Array.from(allTags).sort((a, b) => a.localeCompare(b));
+  const sorted = Array.from(allTags).sort((a, b) => String(a).localeCompare(String(b)));
 
   sorted.forEach(tag => {
     const btn = document.createElement("button");
@@ -584,7 +1019,7 @@ function renderTagFilters(items) {
 }
 
 // =========================
-// Folder tree render (with pin)
+// Folder tree render
 // =========================
 
 function renderFolderTree(root) {
@@ -599,7 +1034,6 @@ function renderFolderTree(root) {
     ul.appendChild(renderFolderNode(folderNode));
   });
 
-  // root-level bookmarks
   root.bookmarks.forEach(b => {
     ul.appendChild(createBookmarkItem(b));
   });
@@ -717,9 +1151,7 @@ function createBookmarkItem(item) {
     img.className = "favicon";
     const fav = getFaviconUrl(item.url);
     if (fav) img.src = fav;
-    img.onerror = () => {
-      img.style.display = "none";
-    };
+    img.onerror = () => (img.style.display = "none");
     row.appendChild(img);
   }
 
@@ -728,26 +1160,44 @@ function createBookmarkItem(item) {
   a.textContent = item.title;
   a.target = "_blank";
   row.appendChild(a);
-// Tag edit button
-const tagBtn = document.createElement("span");
-tagBtn.className = "tagEditBtn";
-tagBtn.textContent = "#";
-tagBtn.title = "Edit tags";
-tagBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  openTagEditor(item.id, li);
-});
-row.appendChild(tagBtn);
+
+  if (SETTINGS.enableManualTags) {
+    const tagBtn = document.createElement("span");
+    tagBtn.className = "tagEditBtn";
+    tagBtn.textContent = "#";
+    tagBtn.title = "Edit tags";
+    tagBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openTagEditor(item.id, li);
+    });
+    row.appendChild(tagBtn);
+  }
+
   li.appendChild(row);
 
-  if (SETTINGS.showDateAdded) {
-    const date = document.createElement("div");
-    date.className = "dateAdded";
-    date.textContent = item.dateAdded
-      ? new Date(item.dateAdded).toLocaleDateString()
-      : "";
-    li.appendChild(date);
+  const showVisit = typeof item.visitCount === "number";
+  const showDate = SETTINGS.showDateAdded && item.dateAdded;
+
+  if ((SETTINGS.showVisitCount && showVisit) || showDate) {
+  const infoRow = document.createElement("div");
+  infoRow.className = "bookmarkInfoRow";
+
+  if (SETTINGS.showVisitCount && showVisit) {
+    const vc = document.createElement("span");
+    vc.className = "visitCountInline";
+    vc.textContent = `Visits: ${item.visitCount}`;
+    infoRow.appendChild(vc);
   }
+
+  if (showDate) {
+    const date = document.createElement("span");
+    date.className = "dateAddedInline";
+    date.textContent = new Date(item.dateAdded).toLocaleDateString();
+    infoRow.appendChild(date);
+  }
+
+  li.appendChild(infoRow);
+}
 
   return li;
 }
@@ -768,7 +1218,7 @@ function wireSearch() {
       ? ALL_BOOKMARKS.filter(b => {
           const title = (b.title || "").toLowerCase();
           const url = (b.url || "").toLowerCase();
-          const tags = (b.tags || []).join(" ").toLowerCase();
+          const tags = getAllTagsForBookmark(b).join(" ").toLowerCase();
           return (
             title.includes(q) ||
             url.includes(q) ||
@@ -840,13 +1290,13 @@ function wireControls() {
     syncViewButtons();
   }
 
+  // legacy select sort (kept for now)
   if (sortSelect) {
     sortSelect.value = CURRENT_SORT;
     sortSelect.style.display = SETTINGS.enableSorting ? "inline-block" : "none";
 
     sortSelect.addEventListener("change", () => {
-      CURRENT_SORT = sortSelect.value;
-      renderList(ALL_BOOKMARKS);
+      setSortMode(sortSelect.value);
     });
   }
 
@@ -873,5 +1323,44 @@ function wireControls() {
 
       alert(removed === 0 ? "No duplicates found." : `Removed ${removed} duplicates.`);
     });
+  }
+
+  // custom dropdown sort (Discord/Notion style)
+  const sortDropdownToggle = document.getElementById("sortDropdownToggle");
+  const sortDropdownMenu = document.getElementById("sortDropdownMenu");
+  const sortDropdownLabel = document.getElementById("sortDropdownLabel");
+
+  if (sortDropdownToggle && sortDropdownMenu && sortDropdownLabel) {
+    let open = false;
+
+    // init label based on CURRENT_SORT
+    sortDropdownLabel.textContent = SORT_LABELS[CURRENT_SORT] || "Sort";
+
+    sortDropdownToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      open = !open;
+      updateDropdownState();
+    });
+
+    sortDropdownMenu.addEventListener("click", (e) => {
+      const btn = e.target.closest(".sortOption");
+      if (!btn) return;
+
+      const mode = btn.dataset.value;
+      setSortMode(mode);
+      open = false;
+      updateDropdownState();
+    });
+
+    document.addEventListener("click", () => {
+      if (!open) return;
+      open = false;
+      updateDropdownState();
+    });
+
+    function updateDropdownState() {
+      sortDropdownMenu.classList.toggle("open", open);
+      sortDropdownToggle.classList.toggle("open", open);
+    }
   }
 }

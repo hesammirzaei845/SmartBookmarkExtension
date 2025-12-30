@@ -1,6 +1,4 @@
-/* base layout */
-html,
-body {
+html, body {
   width: 320px;
   min-height: 220px;
   max-height: 600px;
@@ -8,7 +6,6 @@ body {
   box-sizing: border-box;
 }
 
-/* LIGHT MODE BASE */
 body {
   font-family: "Inter", "Segoe UI", "Tahoma", "IRANYekan", sans-serif;
   font-weight: 400;
@@ -19,7 +16,6 @@ body {
   color: #2c3e50;
 }
 
-/* HEADER */
 h2 {
   font-size: 15px;
   font-weight: 500;
@@ -30,14 +26,12 @@ h2 {
   padding-bottom: 6px;
 }
 
-/* LIST RESET */
 ul {
   list-style: none;
   margin: 6px 0 0 0;
   padding: 0;
 }
 
-/* SEARCH */
 #searchInput {
   width: 100%;
   box-sizing: border-box;
@@ -49,12 +43,12 @@ ul {
   background-color: #fff;
   color: #2c3e50;
 }
+
 #searchInput:focus {
   outline: 2px solid #b9c4cf;
   outline-offset: 1px;
 }
 
-/* CONTROLS */
 #controls {
   display: flex;
   flex-direction: column;
@@ -70,31 +64,6 @@ ul {
   gap: 6px;
 }
 
-/* SORT */
-#sortSelect {
-  font-size: 12px;
-  padding: 4px 6px;
-  border: 1px solid #e3e6e9;
-  border-radius: 4px;
-  background-color: #fff;
-  color: #2c3e50;
-}
-
-/* DEDUP */
-#dedupBtn {
-  padding: 4px 8px;
-  font-size: 12px;
-  border: 1px solid #e3e6e9;
-  background: #fff;
-  border-radius: 4px;
-  cursor: pointer;
-  color: #2c3e50;
-}
-#dedupBtn:hover {
-  background: #f0f0f0;
-}
-
-/* VIEW TOGGLE */
 .viewToggle {
   display: flex;
   border: 1px solid #d0d4d8;
@@ -114,22 +83,22 @@ ul {
   color: #2c3e50;
   padding: 0;
 }
+
 .viewToggle button:hover {
   background: #e8eaec;
 }
+
 .viewToggle button.active {
   background: #2c3e50;
   color: #ffffff;
 }
 
-/* COUNT BAR */
 .countBar {
   font-size: 12px;
   color: #555;
   margin-bottom: 8px;
 }
 
-/* FOLDER TREE */
 li.folder {
   margin-top: 10px;
   padding-bottom: 2px;
@@ -144,16 +113,14 @@ li.folder {
   cursor: pointer;
   color: #5f6b76;
   font-weight: 500;
-  transition:
-    background-color 0.18s ease,
-    box-shadow 0.18s ease;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease;
 }
+
 .folderHeader:hover {
   background-color: #f4f6f8;
   box-shadow: inset 0 0 0 1px #e3e6e9;
 }
 
-/* FOLDER TOGGLE (caret) – polished rotation */
 .folderToggle {
   font-size: 11px;
   width: 14px;
@@ -163,11 +130,11 @@ li.folder {
   display: inline-block;
   transition: transform 0.28s cubic-bezier(0.25, 1.3, 0.5, 1);
 }
+
 li.folder.collapsed .folderToggle {
   transform: rotate(-90deg);
 }
 
-/* FOLDER ICON */
 .folderIcon {
   width: 16px;
   height: 14px;
@@ -175,6 +142,7 @@ li.folder.collapsed .folderToggle {
   position: relative;
   flex-shrink: 0;
 }
+
 .folderIcon::before {
   content: "";
   position: absolute;
@@ -185,6 +153,7 @@ li.folder.collapsed .folderToggle {
   background-color: #d8dee4;
   border-radius: 2px;
 }
+
 .folderIcon::after {
   content: "";
   position: absolute;
@@ -195,9 +164,11 @@ li.folder.collapsed .folderToggle {
   background-color: #e2e8ef;
   border-radius: 2px 2px 0 0;
 }
+
 .folderHeader:hover .folderIcon::before {
   background-color: #cfd6dd;
 }
+
 .folderHeader:hover .folderIcon::after {
   background-color: #dce2e8;
 }
@@ -215,37 +186,25 @@ li.folder.collapsed .folderToggle {
   flex-shrink: 0;
 }
 
-/* CHILDREN – base + smooth expand/collapse + basic indent */
-/* FOLDER CHILDREN – smooth expand/collapse */
 .folderChildren {
   margin-top: 6px;
   margin-left: 16px;
   padding-left: 10px;
   border-left: 1px solid #e3e6e9;
-
   overflow: hidden;
-
-  /* مقدار بزرگ برای انیمیشن */
   max-height: 1200px;
-
-  transition:
-    max-height 0.28s ease,
-    opacity 0.22s ease;
+  transition: max-height 0.28s ease, opacity 0.22s ease;
 }
 
-/* collapsed */
 li.folder.collapsed > .folderChildren {
   max-height: 0;
   opacity: 0;
 }
 
-/* fade + slide for items */
 .folderChildren > * {
   opacity: 1;
   transform: translateY(0);
-  transition:
-    opacity 0.22s ease,
-    transform 0.22s ease;
+  transition: opacity 0.22s ease, transform 0.22s ease;
 }
 
 li.folder.collapsed > .folderChildren > * {
@@ -253,14 +212,14 @@ li.folder.collapsed > .folderChildren > * {
   transform: translateY(-4px);
 }
 
-
-/* BOOKMARK */
 li.bookmark {
   margin: 4px 0;
   padding: 4px 6px;
   border-radius: 6px;
   transition: background-color 0.15s ease;
+  box-sizing: border-box;
 }
+
 li.bookmark:hover {
   background-color: #f6f8fa;
 }
@@ -287,17 +246,15 @@ li.bookmark a {
   text-decoration: none;
   display: block;
 }
+
 li.bookmark a:hover {
   text-decoration: underline;
 }
 
-/* BOOKMARK fade when folder opens */
 .folderChildren li.bookmark {
   opacity: 0;
   transform: translateY(2px);
-  transition:
-    opacity 0.22s ease,
-    transform 0.22s ease;
+  transition: opacity 0.22s ease, transform 0.22s ease;
 }
 
 li.folder:not(.collapsed) .folderChildren li.bookmark {
@@ -305,7 +262,6 @@ li.folder:not(.collapsed) .folderChildren li.bookmark {
   transform: translateY(0);
 }
 
-/* DATE */
 .dateAdded {
   font-size: 11px;
   color: #777;
@@ -313,7 +269,6 @@ li.folder:not(.collapsed) .folderChildren li.bookmark {
   margin-left: 24px;
 }
 
-/* TAG FILTER */
 .tagFilterBar {
   display: flex;
   flex-wrap: wrap;
@@ -324,7 +279,7 @@ li.folder:not(.collapsed) .folderChildren li.bookmark {
 
 .tagFilterButton {
   padding: 3px 8px;
-  font-size: 11px;
+  font-size: 0.9em;
   border: 1px solid #d0d4d8;
   border-radius: 12px;
   background-color: #f5f6f7;
@@ -332,16 +287,17 @@ li.folder:not(.collapsed) .folderChildren li.bookmark {
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
+
 .tagFilterButton:hover {
   background-color: #e8eaec;
 }
+
 .tagFilterButton.active {
   background-color: #2c3e50;
   color: #ffffff;
   border-color: #2c3e50;
 }
 
-/* TAG VIEW */
 .tagView {
   display: flex;
   flex-direction: column;
@@ -356,234 +312,210 @@ li.folder:not(.collapsed) .folderChildren li.bookmark {
 }
 
 .tagHeader {
-  font-size: 12px;
+  font-size: 1em;
   font-weight: 600;
   color: #34495e;
   margin-bottom: 4px;
 }
 
-/* COMPACT MODE */
 body.compact li.folder {
   margin-top: 6px;
 }
+
 body.compact .folderChildren {
   margin-top: 4px;
   margin-left: 12px;
   padding-left: 8px;
 }
-body.compact .folderChildren.depth-1 {
-  margin-left: 12px;
-}
-body.compact .folderChildren.depth-2 {
-  margin-left: 22px;
-}
-body.compact .folderChildren.depth-3 {
-  margin-left: 32px;
-}
-body.compact .folderHeader {
-  padding: 3px 4px;
-}
+
 body.compact li.bookmark {
   padding: 3px 5px;
   margin: 1px 0;
 }
+
 body.compact li.bookmark a {
   font-size: 13px;
 }
-body.compact .dateAdded {
-  font-size: 10px;
-}
+
 body.compact .tagFilterButton {
   padding: 2px 6px;
   font-size: 10px;
 }
 
-/* DARK MODE — polished, with ONLY the main background black */
 body.dark {
-  background-color: #000000; /* فقط زمینه کلی */
+  background-color: #000000;
   color: #e6e6e6;
 }
 
-/* HEADER */
 body.dark h2 {
   color: #e0e0e0;
   border-bottom: 1px solid #333;
 }
 
-/* SEARCH */
 body.dark #searchInput {
-  background-color: #1a1a1a;   /* روشن‌تر از قبل */
+  background-color: #1a1a1a;
   color: #f0f0f0;
   border: 1px solid #3a3a3a;
 }
+
 body.dark #searchInput:focus {
   outline: 2px solid #3a82f7;
 }
 
-/* SORT + BUTTONS */
-body.dark #sortSelect,
-body.dark #dedupBtn {
-  background-color: #1a1a1a;   /* روشن‌تر و ملایم‌تر */
-  color: #e6e6e6;
-  border: 1px solid #3a3a3a;
-}
-body.dark #dedupBtn:hover {
-  background-color: #222222;
+#dedupBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid #d0d4d8;
+  border-radius: 4px;
+  background-color: #f5f6f7;
+  color: #2c3e50;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* VIEW TOGGLE */
+#dedupBtn:hover {
+  background-color: #e8eaec;
+  box-shadow: inset 0 0 0 1px #c0c4c8;
+}
+
+body.dark #dedupBtn {
+  background-color: #1a1a1a;
+  color: #e6e6e6;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 4px 8px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+body.dark #dedupBtn:hover {
+  background-color: #262626;
+  border-color: #3a82f7;
+}
+
 body.dark .viewToggle {
   border-color: #3a3a3a;
 }
+
 body.dark .viewToggle button {
   background-color: #1a1a1a;
   color: #e6e6e6;
 }
+
 body.dark .viewToggle button:hover {
   background-color: #262626;
 }
+
 body.dark .viewToggle button.active {
   background-color: #3a82f7;
   color: #ffffff;
 }
 
-/* FOLDER HEADER */
 body.dark .folderHeader {
   color: #e6e6e6;
-  background-color: #141414; /* subtle */
+  background-color: #141414;
 }
+
 body.dark .folderHeader:hover {
-  background-color: #1f1f1f; /* روشن‌تر */
+  background-color: #1f1f1f;
   box-shadow: inset 0 0 0 1px #333;
 }
 
-/* FOLDER ICON */
 body.dark .folderIcon::before {
   background-color: #4a4a4a;
 }
+
 body.dark .folderIcon::after {
   background-color: #5a5a5a;
 }
-body.dark .folderHeader:hover .folderIcon::before {
-  background-color: #5c5c5c;
-}
-body.dark .folderHeader:hover .folderIcon::after {
-  background-color: #6a6a6a;
-}
 
-/* FOLDER CHILDREN – dark borders for all depths */
 body.dark .folderChildren {
   border-left: 1px solid #3a3a3a;
 }
 
-/* BOOKMARK */
-body.dark li.bookmark {
-  background-color: transparent;
-}
 body.dark li.bookmark:hover {
-  background-color: #1a1a1a; /* روشن‌تر و ملایم */
+  background-color: #1a1a1a;
 }
+
 body.dark li.bookmark a {
   color: #ffffff;
 }
 
-/* TAG GROUP */
 body.dark .tagGroup {
-  background-color: #141414; /* روشن‌تر از قبل */
+  background-color: #141414;
   border-color: #333;
 }
-body.dark .tagGroup:hover {
-  background-color: #1a1a1a;
-}
+
 body.dark .tagHeader {
   color: #e0e0e0;
 }
 
-/* TAG BUTTONS (حباب‌ها) */
 body.dark .tagFilterButton {
-  background-color: #1f1f1f;   /* روشن‌تر و ملایم‌تر */
+  background-color: #1f1f1f;
   color: #d0d0d0;
   border-color: #3a3a3a;
 }
+
 body.dark .tagFilterButton:hover {
-  background-color: #262626;   /* hover روشن‌تر */
+  background-color: #262626;
 }
+
 body.dark .tagFilterButton.active {
   background-color: #3a82f7;
   color: #ffffff;
   border-color: #3a82f7;
 }
 
-/* BREADCRUMB */
-body.dark #breadcrumb {
-  color: #cccccc;
-}
-body.dark #breadcrumb span {
-  color: #4da3ff;
-}
-body.dark #breadcrumb .sep {
-  color: #666;
-}
-
-/* PIN BUTTON */
 .folderPinBtn {
   cursor: pointer;
   margin-left: 6px;
   opacity: 0.6;
   transition: opacity 0.2s;
 }
+
 .folderPinBtn:hover {
   opacity: 1;
 }
 
-/* BREADCRUMB ITEMS */
 .crumb {
   max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.crumb.clickable {
-  cursor: pointer;
-  color: var(--accent);
-}
-.crumb.clickable:hover {
-  text-decoration: underline;
-}
-.crumbSep {
-  opacity: 0.6;
-}
-.crumb.current {
-  font-weight: 600;
-}
 
-/* Tag edit button */
 .tagEditBtn {
-  font-size: 12px;
+  font-size: 0.9em;
   padding: 2px 4px;
   cursor: pointer;
   opacity: 0.6;
   border-radius: 4px;
 }
+
 .tagEditBtn:hover {
   opacity: 1;
   background-color: #e8eaec;
 }
 
-/* Tag editor popup */
 .tagEditor {
   margin-top: 4px;
   padding: 6px;
   border: 1px solid #d0d4d8;
   border-radius: 6px;
   background: #f5f6f7;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .tagEditorInput {
   width: 100%;
+  box-sizing: border-box;
   padding: 4px 6px;
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: 0.9em;
   border: 1px solid #ccc;
   border-radius: 4px;
 }
@@ -598,7 +530,7 @@ body.dark #breadcrumb .sep {
   background: #d0d4d8;
   padding: 2px 6px;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 0.9em;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -608,43 +540,145 @@ body.dark #breadcrumb .sep {
   cursor: pointer;
   opacity: 0.7;
 }
+
 .tagChipRemove:hover {
   opacity: 1;
 }
 
-/* DARK MODE — Tag edit button */
 body.dark .tagEditBtn {
   color: #e0e0e0;
   background-color: transparent;
 }
-body.dark .tagEditBtn:hover {
-  background-color: #1f1f1f;
-}
 
-/* DARK MODE — Tag editor popup */
 body.dark .tagEditor {
   background-color: #141414;
   border-color: #333;
 }
 
-/* DARK MODE — Tag editor input */
 body.dark .tagEditorInput {
   background-color: #1a1a1a;
   color: #f0f0f0;
   border: 1px solid #3a3a3a;
 }
-body.dark .tagEditorInput:focus {
-  outline: 2px solid #3a82f7;
-}
 
-/* DARK MODE — Tag chips */
 body.dark .tagChip {
   background-color: #2a2a2a;
   color: #e0e0e0;
 }
+
 body.dark .tagChipRemove {
   color: #cccccc;
 }
+
 body.dark .tagChipRemove:hover {
   color: #ffffff;
+}
+
+.bookmarkInfoRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: #777;
+  margin-left: 24px;
+  margin-top: 2px;
+}
+
+body.dark .bookmarkInfoRow {
+  color: #ccc;
+}
+
+.visitCountInline,
+.dateAddedInline {
+  white-space: nowrap;
+}
+
+.sortDropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.sortToggleBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  background: #fff;
+  border: 1px solid #e3e6e9;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #2c3e50;
+  white-space: nowrap;
+  justify-content: space-between;
+  min-width: 100px;
+}
+
+.sortToggleBtn:hover {
+  background: #f0f0f0;
+}
+
+.sortToggleBtn.open {
+  background: #e8eaec;
+}
+
+.sortMenu {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  width: 160px;
+  background: #fff;
+  border: 1px solid #e3e6e9;
+  border-radius: 6px;
+  padding: 4px 0;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  z-index: 20;
+}
+
+.sortMenu.open {
+  display: block;
+}
+
+.sortOption {
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  color: #2c3e50;
+}
+
+.sortOption:hover {
+  background: #f5f6f7;
+}
+
+body.dark .sortToggleBtn {
+  background: #1a1a1a;
+  border-color: #3a3a3a;
+  color: #e6e6e6;
+}
+
+body.dark .sortToggleBtn:hover {
+  background: #262626;
+}
+
+body.dark .sortMenu {
+  background: #1a1a1a;
+  border-color: #3a3a3a;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+body.dark .sortOption {
+  color: #e6e6e6;
+}
+
+body.dark .sortOption:hover {
+  background: #262626;
+}
+
+body.hideVisits .visitCountInline {
+  display: none;
 }
